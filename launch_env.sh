@@ -6,6 +6,9 @@ export NUMEXPR_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
+# Force the Ford Expedition CAN-FD platform for this personal vehicle build.
+export FINGERPRINT="FORD_EXPEDITION_MK4"
+
 # models get lower priority than ui
 # - ui is ~5ms
 # - modeld is 20ms
