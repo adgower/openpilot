@@ -6,6 +6,9 @@ export NUMEXPR_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
+# This installer is intentionally locked to the Ford Expedition 2022-24 platform.
+export FINGERPRINT="FORD_EXPEDITION_MK4"
+
 # models get lower priority than ui
 # - ui is ~5ms
 # - modeld is 20ms
