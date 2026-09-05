@@ -13,6 +13,7 @@ from openpilot.common.utils import atomic_write
 from openpilot.common.params import Params, ParamKeyFlag
 from openpilot.common.text_window import TextWindow
 from openpilot.common.hardware import HARDWARE
+from openpilot.system.manager.chestnut_recovery import ChestnutRecovery, RecoveryInput
 from openpilot.system.manager.helpers import unblock_stdout, save_bootlog
 from openpilot.system.manager.process import ensure_running
 from openpilot.system.manager.process_config import managed_processes
@@ -113,7 +114,8 @@ def manager_thread() -> None:
     ignore.append("pandad")
   ignore += [x for x in os.getenv("BLOCK", "").split(",") if len(x) > 0]
 
-  sm = messaging.SubMaster(['deviceState', 'carParams', 'pandaStates'], poll='deviceState')
+  sm = messaging.SubMaster(['deviceState', 'carParams', 'pandaStates', 'carState', 'selfdriveState', 'chestnutState', 'modelV2'], poll='deviceState')
+  recovery = ChestnutRecovery(params, managed_processes['modeld'], logger=cloudlog)
   pm = messaging.PubMaster(['managerState'])
 
   params.put_bool("IsOffroad", True, block=True)
@@ -143,7 +145,24 @@ def manager_thread() -> None:
     started_prev = started
     ignition_prev = ignition
 
-    ensure_running(managed_processes.values(), started, params=params, CP=sm['carParams'], not_run=ignore)
+    now = time.monotonic()
+    fresh = {s: sm.valid[s] and sm.seen[s] and 0 <= now-sm.logMonoTime[s]*1e-9 < 1. for s in sm.services}
+
+    state = RecoveryInput(
+      started=started,
+      allowed=managed_processes['modeld'].enabled and 'modeld' not in ignore and not sm['carParams'].passive,
+      safe_to_restart=all(fresh[s] for s in ('deviceState', 'carState', 'selfdriveState')) and
+                      not sm['selfdriveState'].enabled and sm['carState'].standstill,
+      power_ready=fresh['chestnutState'] and sm['deviceState'].chestnutPresent and
+                  not sm['chestnutState'].supplyFault and sm['chestnutState'].supplyVoltage >= 11000,
+      model_valid=fresh['modelV2'] and fresh['selfdriveState'], model_big=sm['modelV2'].big, model_frame=sm['modelV2'].frameId,
+      model_time=sm.logMonoTime['modelV2']*1e-9,
+    )
+    recovering = recovery.update(state, now)
+    # Repeated stop(block=False) calls can still join an already-stopping
+    # process. Recovery owns modeld until it has exited and been reaped.
+    procs = {name: p for name, p in managed_processes.items() if not (recovering and name == 'modeld')}
+    ensure_running(procs.values(), started, params=params, CP=sm['carParams'], not_run=ignore)
 
     running = ' '.join("{}{}\u001b[0m".format("\u001b[32m" if p.proc.is_alive() else "\u001b[31m", p.name)
                        for p in managed_processes.values() if p.proc)

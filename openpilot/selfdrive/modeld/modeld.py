@@ -241,7 +241,8 @@ def main(demo=False):
   if CHESTNUT:
     os.environ['HCQDEV_WAIT_TIMEOUT_MS'] = '3000'
   params = Params()
-  params.put_bool("ChestnutLoading", CHESTNUT)
+  try_big = CHESTNUT and not params.get_bool("ChestnutRecoverySkipBig")
+  params.put_bool("ChestnutLoading", try_big)
   params.remove("ChestnutActive")
 
   config_realtime_process(7, 54)
@@ -272,7 +273,7 @@ def main(demo=False):
   st = time.monotonic()
   cloudlog.warning("loading model")
   model = None
-  if CHESTNUT:
+  if try_big:
     big_model = None
     def load_big():
       nonlocal big_model
@@ -286,6 +287,7 @@ def main(demo=False):
     loader.start()
     loader.join(BIG_MODEL_TIMEOUT)
     model = big_model
+  if CHESTNUT or params.get("ChestnutRecoveryRequest"):
     params.put_bool("ChestnutActive", model is not None)
 
   small_model = ModelState(vipc_client_main.width, vipc_client_main.height, False) if model is None or CHESTNUT else None

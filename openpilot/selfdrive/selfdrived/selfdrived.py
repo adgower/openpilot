@@ -150,6 +150,19 @@ class SelfdriveD:
     elif self.CP.passive:
       self.events.add(EventName.dashcamMode, static=True)
 
+  def update_model_loading(self):
+    self.chestnut_recovery_request = self.params.get("ChestnutRecoveryRequest") or 0
+    loading = self.params.get_bool("ChestnutLoading")
+    if self.chestnut_recovery_request:
+      # Recovery has its own interlock. Keep communication and localization
+      # checks enabled, including immediately after recovery finishes.
+      self.big_model_ready_t = -float('inf')
+    elif self.big_model_loading and not loading:
+      self.big_model_ready_t = time.monotonic()
+    self.big_model_loading = loading and not self.chestnut_recovery_request
+    if loading or self.chestnut_recovery_request:
+      self.events.add(EventName.bigModelLoading)
+
   def update_events(self, CS):
     """Compute onroadEvents from carState"""
 
@@ -159,12 +172,7 @@ class SelfdriveD:
       self.events.add(EventName.joystickDebug)
       self.startup_event = None
 
-    loading = self.params.get_bool("ChestnutLoading")
-    if self.big_model_loading and not loading:
-      self.big_model_ready_t = time.monotonic()
-    self.big_model_loading = loading
-    if self.big_model_loading:
-      self.events.add(EventName.bigModelLoading)
+    self.update_model_loading()
 
     big_active = self.params.get("ChestnutActive")
     chestnut_present = self.sm['deviceState'].chestnutPresent
@@ -555,6 +563,16 @@ class SelfdriveD:
     self.update_events(CS)
     if not self.CP.passive and self.initialized:
       self.enabled, self.active = self.state_machine.update(self.events)
+    # Acknowledge only after this request's no-entry event has been processed.
+    # Manager must receive this generation before stopping modeld.
+    if not self.CP.passive and self.initialized and not self.enabled:
+      if self.params.get("ChestnutRecoveryAck") != self.chestnut_recovery_request:
+        self.params.put("ChestnutRecoveryAck", self.chestnut_recovery_request, block=True)
+    # Check publication frequency here: selfdrived consumes at 100 Hz, whereas
+    # manager's slow polling cannot establish model/camera-odometry health.
+    ready = self.chestnut_recovery_request if self.sm.all_checks(['modelV2', 'cameraOdometry']) else 0
+    if self.params.get("ChestnutRecoveryReady") != ready:
+      self.params.put("ChestnutRecoveryReady", ready, block=True)
     self.update_alerts(CS)
 
     self.publish_selfdriveState(CS)
