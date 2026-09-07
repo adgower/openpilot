@@ -101,7 +101,8 @@ def main():
   (args.output / 'metadata.json').write_text(json.dumps(metadata, indent=2))
   sections = []
   panels = [
-    ('Compiled admission (0/1) / reason bits; missing means not evaluated', [('compiled_admitted', '#187246'), ('compiled_reason_bits', '#b52b25')]),
+    ('Compiled admission (0/1); missing means not evaluated', [('compiled_admitted', '#187246')]),
+    ('Rejection reason bitmask (separate scale)', [('compiled_reason_bits', '#b52b25')]),
     ('Curvature (1/m)', [('input_curvature_inv_m', '#b52b25'), ('modelV2.action.desiredCurvature', '#9962ab'),
                        ('lateralManeuverPlan.desiredCurvature', '#9962ab'), ('carOutput.actuatorsOutput.curvature', '#dd9820'),
                        ('derived.yawCurvature', '#187246')]),
