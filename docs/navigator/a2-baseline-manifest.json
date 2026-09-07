@@ -17,7 +17,7 @@
   "learned_state": "preserved; not embedded in source or forced to static defaults",
   "notes": [
     "Recorded and backed-up state is evidence from earlier deployment, not a new live device audit.",
-    "A2 child commit is separately required; parent baseline gitlink remains b4ef until final reproducible package is assembled.",
+    "Original parent gitlink is b4ef; the final experiment parent pins the separately bundled child commit including A2 and offline A3.",
     "A3 is a core conversion/lifecycle experiment, not complete BluePilot Angle."
   ]
 }
