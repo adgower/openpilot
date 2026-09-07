@@ -23,3 +23,6 @@ if [ -z "$AGNOS_VERSION" ]; then
 fi
 
 export STAGING_ROOT="/data/safe_staging"
+
+# Owner-authorized A2-WB experiment; mass retained.
+export NAVIGATOR_A2_PROFILE="2023-navigator-swb-4wd"
