@@ -118,3 +118,34 @@ def test_speed_outside_core_domain(variants, speed):
   result = run(lib, {'normal-small-angle': inputs(speed)['normal-small-angle']}, {})
   assert not result['normal-small-angle'][-1]['accepted']
   assert result['normal-small-angle'][-1]['candidate_reasons'] & 64
+
+
+@pytest.mark.parametrize('profile_id', range(4))
+@pytest.mark.parametrize('sign', [-1, 1])
+@pytest.mark.parametrize('speed', [8.763889, 13.5, 23.76111, 26.82, 35., 60.])
+def test_core_commands_and_driver_reentry_pass_unchanged_compiled_checks(variants, profile_id, sign, speed):
+  from opendbc.can import CANPacker
+  from opendbc.car.ford.navigator_a3 import PROFILES, Inputs, State, update, encode_offline
+  lib = variants['candidate'][0]
+  lib.audit_init()
+  lib.audit_profile(profile_id)
+  profile = list(PROFILES.values())[profile_id]
+  state = State()
+  packer = CANPacker('ford_lincoln_base_pt')
+  frame = 0
+  # Reuse checksum-valid, counter-incrementing RX fixture. Permission is explicit
+  # test setup, not fabricated evidence in raw-log replay or production.
+  for row in inputs(speed)['latch-expiry-controls-off']:
+    lib.audit_timer(row['time_us'])
+    if not row['tx']:
+      data = (ctypes.c_ubyte * 8).from_buffer_copy(bytes.fromhex(row['data_hex']))
+      assert lib.audit_packet(row['address'], 0, data, 0)
+    elif row['address'] == 0x3D6:
+      lib.audit_controls(1)
+      t = row['time_us'] * 1000
+      output = update(profile, state, Inputs(t, t, sign * .001, speed, True, frame in (20, 21)))
+      state = output.state
+      addr, wire, bus = encode_offline(packer, output, frame % 16)
+      assert output.mode == (0 if frame in (20, 21) else 1)
+      assert lib.audit_packet(addr, bus, (ctypes.c_ubyte * 8).from_buffer_copy(wire), 1), (frame, lib.audit_reasons())
+      frame += 1
