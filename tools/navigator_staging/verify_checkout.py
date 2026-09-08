@@ -24,6 +24,12 @@ def verify(root):
   if 'export FINGERPRINT="FORD_EXPEDITION_MK4"' not in (root/'launch_env.sh').read_text():raise ValueError('Missing fixed fingerprint')
   return manifest
 
+def validate_diagnostics_schema():
+  from openpilot.cereal import log
+  message = log.Event.new_message()
+  message.init('carOutput').navigatorA3.mode = 'shadow'
+  assert str(message.carOutput.navigatorA3.mode) == 'shadow'
+
 if __name__=='__main__':
   p=argparse.ArgumentParser();p.add_argument('--root',type=Path,required=True);p.add_argument('--artifacts',action='store_true');p.add_argument('--match-result',action='store_true');a=p.parse_args();r=a.root.resolve();verify(r)
   result={'source_verified':True,'target_built':False}
@@ -42,7 +48,6 @@ if __name__=='__main__':
         required.append(str(Path(part).relative_to(r)))
     # Import generated/native modules only; never instantiate Car, Panda or messaging sockets.
     import opendbc
-    from opendbc.car import structs
     import msgq.ipc_pyx
     import openpilot.common.params as params_module
     from openpilot.common.params import Params
@@ -51,7 +56,7 @@ if __name__=='__main__':
       path=Path(module.__file__).resolve()
       if r not in path.parents:raise ValueError(f'Native module outside staging checkout: {path}')
       required.append(str(path.relative_to(r)))
-    structs.CarOutput.new_message().navigatorA3.mode='shadow'
+    validate_diagnostics_schema()
     for name in required:
       if not (r/name).is_file() or ((r/name).stat().st_size==0 and '.chunk' not in name):raise ValueError(f'Missing build artifact: {name}')
     result.update(target_built=True,artifacts={name:sha(r/name) for name in sorted(set(required))},signing='repository debug certificate; not installed',safety_include=str(opendbc.INCLUDE_PATH))
