@@ -122,3 +122,22 @@ def test_invalid_startup_health_waits_for_evidence_then_faults_when_armed():
   b.observe(health(1))
   b.observe(health(2, valid=False))
   assert b.fault_reason == 'invalid_health'
+
+@pytest.mark.parametrize('failure,expected', [({'safetyParam': 0}, 'configuration_mismatch'),
+                                            ({'valid': False}, 'invalid_health'),
+                                            ({'controlsAllowed': False}, 'permission_unavailable')])
+def test_shadow_rejection_does_not_mask_later_calculation_fault(failure, expected):
+  b = RuntimeBridge('shadow', [('ford',4,0)], 'r', 'live')
+  b.controls_ready = True
+  b.active_request = True
+  b.observe(health(0))
+  b.observe(packet('rejected', 1))
+  assert b.fault_reason == 'direct_steering_rejection'
+  assert b.calculation_fault_reason is None
+  b.observe(health(2, **failure))
+  assert b.fault_reason == 'direct_steering_rejection'
+  assert b.calculation_fault_reason == expected
+  b.observe(packet('returned', 3))
+  b.observe(health(4))
+  assert b.calculation_fault_reason == expected
+  assert b.diagnostics()['schema_version'] == 2

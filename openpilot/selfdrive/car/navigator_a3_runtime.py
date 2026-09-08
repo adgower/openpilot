@@ -119,6 +119,7 @@ class RuntimeBridge:
     self.dropped_diagnostics = 0
     self.order = 0
     self.fault_reason = 'physical_enforcement_unvalidated' if mode == 'requested' else None
+    self.calculation_fault_reason = self.fault_reason
 
   @property
   def disengagement_requested(self):
@@ -147,6 +148,8 @@ class RuntimeBridge:
         reason = 'permission_unavailable'
     if reason and self.fault_reason is None:
       self.fault_reason = reason
+    if reason and self.calculation_fault_reason is None and not (self.mode == 'shadow' and reason == 'direct_steering_rejection'):
+      self.calculation_fault_reason = reason
     # Keep bounded pending evidence; the original can/sendcan/pandaStates remain
     # logged by normal services. Never turn diagnostic overflow into attribution.
     if event['kind'] == 'health' or event.get('address') == TARGET or event['kind'] == 'rejected':
@@ -168,8 +171,9 @@ class RuntimeBridge:
                              'safetyParam': int(state.safetyParam), 'alternativeExperience': int(state.alternativeExperience)})
 
   def diagnostics(self):
-    result = {'schema_version': 1, 'stream_id': self.observer.route_id, 'provenance': self.observer.provenance,
-              'fault_reason': self.fault_reason, 'inhibited': self.disengagement_requested,
+    result = {'schema_version': 2, 'stream_id': self.observer.route_id, 'provenance': self.observer.provenance,
+              'fault_reason': self.fault_reason, 'calculation_fault_reason': self.calculation_fault_reason,
+              'calculation_eligible': self.configuration_armed and self.calculation_fault_reason is None, 'inhibited': self.disengagement_requested,
               'transport': list(self.pending), 'dropped_diagnostics': self.dropped_diagnostics,
               'coverage_incomplete': self.observer.coverage_incomplete, 'configuration_armed': self.configuration_armed}
     self.pending.clear()
@@ -222,7 +226,8 @@ def prepare_controller(ci, cs, sm, bridge):
                                 source_valid=bool(sm.all_checks(['carControl'])),
                                 measurement_ns=measurement_ns,
                                 measurement_valid=bool(cs.canValid and not cs.vehicleSensorsInvalid and measurement_ns is not None),
-                                fault_reason=bridge.fault_reason or (None if bridge.configuration_armed else 'configuration_pending'))
+                                fault_reason=bridge.fault_reason,
+                                calculation_fault_reason=bridge.calculation_fault_reason or (None if bridge.configuration_armed else 'configuration_pending'))
 
 
 def control_for_apply(cc, bridge):

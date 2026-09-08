@@ -95,3 +95,46 @@ def test_real_card_requested_publishes_neutral_and_status(monkeypatch):
   events = []
   add_inhibition_event(instance.pm.read('carOutput').carOutput, events.append, 'steerUnavailable')
   assert events == ['steerUnavailable']
+
+
+def test_real_card_serialized_shadow_survives_a2_rejection_but_not_later_permission_fault(monkeypatch):
+  baseline, baseline_cc, _ = harness(monkeypatch, 'a2')
+  shadow, shadow_cc, _ = harness(monkeypatch, 'shadow')
+  bridge = shadow.navigator_a3_bridge
+  health = NS(safetyTxBlocked=0, controlsAllowed=True, safetyRxChecksInvalid=False,
+              safetyModel='ford', safetyParam=2, alternativeExperience=0)
+  bridge.panda(1_000_000_000, True, 0, health)
+  assert bridge.configuration_armed
+  steering = next(data for address, data, bus in frames(shadow) if address == 982)
+  bridge.packet('rejected', 1_000_000_001, True, 982, steering, 0, 192)
+  assert bridge.fault_reason == 'direct_steering_rejection'
+  _, cs = sample(25)
+  cs.out.canValid = True
+  for step in range(1, 16):
+    now = 1_000_000_000 + step * 10_000_000
+    monkeypatch.setattr('openpilot.selfdrive.car.card.time.monotonic', lambda now=now: now / 1e9)
+    if step == 6:
+      bridge.active_request = True
+      health.controlsAllowed = False
+      bridge.panda(now, True, 0, health)
+    if step == 11:
+      health.controlsAllowed = True
+      bridge.panda(now, True, 0, health)
+      bridge.packet('returned', now + 1, True, 982, steering, 0, 128)
+    for instance, command in ((baseline, baseline_cc), (shadow, shadow_cc)):
+      instance.sm.logMonoTime['carControl'] = now
+      for values in instance.CI.can_parsers['pt'].ts_nanos.values():
+        for key in values:
+          values[key] = now
+      instance.controls_update(cs.out, command)
+      instance.state_publish(cs.out, None)
+    assert frames(baseline) == frames(shadow)
+    if step % 5 == 0:
+      status = shadow.pm.read('carOutput').carOutput.navigatorA3
+      diagnostic = json.loads(status.diagnosticsJson)
+      assert status.version == 1  # unchanged cereal wire shape
+      assert diagnostic['schema_version'] == diagnostic['controller']['schema_version'] == 2
+      assert status.reason == 'direct_steering_rejection' and not status.inhibited
+      assert diagnostic['controller']['output']['mode'] == (1 if step == 5 else 0)
+      assert diagnostic['calculation_fault_reason'] == (None if step == 5 else 'permission_unavailable')
+      assert not diagnostic['controller']['output']['transmission_allowed']

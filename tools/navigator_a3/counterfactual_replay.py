@@ -53,7 +53,15 @@ def replay_rows(rows):
       if type(counter) is not int or not 0 <= counter <= 15:
         raise ValueError('missing_recorded_counter')
       # Other original invalidity stays invalid. Never modify the historical dict.
-      inferred_valid = ev['event_valid'] and (sample.valid or c.get('evidence_fault_reason') == 'direct_steering_rejection')
+      if historical.get('schema_version', 1) >= 2 or c.get('schema_version', 1) >= 2:
+        # Version 2 already separates transport evidence from calculation gates.
+        # Missing explicit eligibility is unknown; never apply the legacy inference.
+        inferred_valid = (ev['event_valid'] and sample.valid and c.get('calculation_eligible') is True
+                          and 'calculation_fault_reason' in c and c['calculation_fault_reason'] is None)
+        result['validity_policy'] = 'version2_explicit_calculation_gates'
+      else:
+        inferred_valid = ev['event_valid'] and (sample.valid or c.get('evidence_fault_reason') == 'direct_steering_rejection')
+        result['validity_policy'] = 'legacy_version1_inferred_source_validity'
       synthetic_input = replace(sample, valid=inferred_valid)
       state = states.get(identity, (profile, State()))[1]
       proposal = update(PROFILES[profile], state, synthetic_input)

@@ -114,3 +114,16 @@ class CounterfactualTests(unittest.TestCase):
 
 if __name__ == '__main__':
   unittest.main()
+
+
+def test_v2_calculation_fault_cannot_be_removed_by_legacy_rejection_inference():
+  from tools.navigator_a3.counterfactual_replay import replay_rows
+  r = row()
+  r['diagnostic']['schema_version'] = 2
+  c = r['diagnostic']['controller']
+  c['schema_version'] = 2
+  c['calculation_fault_reason'] = 'permission_unavailable'
+  c['calculation_eligible'] = False
+  result = list(replay_rows([r]))[0]
+  assert result['synthetic']['mode'] == 0
+  assert not result['synthetic_input']['valid']
