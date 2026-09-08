@@ -16,6 +16,8 @@ def verify(root):
     actual=subprocess.check_output(['git','-C',str(path),'rev-parse','HEAD'],text=True).strip()
     if actual!=item['sha']:raise ValueError(f'Wrong pin: {path}')
     subprocess.run(['git','-C',str(path),'diff','--exit-code','HEAD','--'],check=True)
+    for entry in item.get('lfs',[]):
+      if sha(path/entry['name'])!=entry['oid']:raise ValueError(f'LFS payload mismatch: {entry["name"]}')
   for name,expected in manifest['models'].items():
     if sha(root/name)!=expected['sha256']:raise ValueError(f'Model hash mismatch: {name}')
   if 'export NAVIGATOR_A2_PROFILE="2023-navigator-swb-4wd"' not in (root/'launch_env.sh').read_text():raise ValueError('Missing A2 selector')

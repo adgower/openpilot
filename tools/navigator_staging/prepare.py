@@ -2,6 +2,9 @@
 import argparse
 import hashlib
 import json
+import os
+import re
+import shutil
 from pathlib import Path
 import subprocess
 
@@ -31,6 +34,13 @@ def verify_package(package: Path):
     if str(p) in paths:raise ValueError('Duplicate repository path')
     paths.add(str(p))
     if digest(package/bundle)!=item['sha256']:raise ValueError(f'Checksum mismatch: {bundle}')
+    for entry in item.get('lfs',[]):
+      name=Path(entry['name']);oid=entry['oid']
+      if name.is_absolute() or '..' in name.parts or not re.fullmatch('[0-9a-f]{64}',oid):
+        raise ValueError('Invalid LFS payload path')
+      payload=package/'lfs'/oid
+      if payload.stat().st_size!=entry['size'] or digest(payload)!=oid:
+        raise ValueError(f'LFS checksum mismatch: {name}')
   return manifest
 
 
@@ -40,9 +50,17 @@ def materialize(package: Path, target: Path, active=Path('/data/openpilot')):
     dest=target/item['path']
     # Gitlinks produce empty directories; git clone accepts only those empty destinations.
     subprocess.run(['git','clone','--no-checkout',str(package/item['bundle']),str(dest)],check=True)
-    subprocess.run(['git','-C',str(dest),'checkout','--detach',item['sha']],check=True)
+    subprocess.run(['git','-C',str(dest),'checkout','--detach',item['sha']],check=True,env={**os.environ,'GIT_LFS_SKIP_SMUDGE':'1'})
     actual=subprocess.check_output(['git','-C',str(dest),'rev-parse','HEAD'],text=True).strip()
     if actual!=item['sha']:raise ValueError('Materialized revision mismatch')
+    for entry in item.get('lfs',[]):
+      oid=entry['oid'];source=package/'lfs'/oid;target_file=dest/entry['name']
+      pointer=target_file.read_text()
+      if f'oid sha256:{oid}' not in pointer:raise ValueError('Unexpected materialized LFS pointer')
+      shutil.copyfile(source,target_file)  # Preserve executable mode from Git checkout.
+      obj=dest/'.git/lfs/objects'/oid[:2]/oid[2:4]/oid
+      obj.parent.mkdir(parents=True,exist_ok=True)
+      shutil.copyfile(source,obj)
   (target/'.staging-package.json').write_text(json.dumps(manifest,indent=2)+'\n')
   return manifest
 

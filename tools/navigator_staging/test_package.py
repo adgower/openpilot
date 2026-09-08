@@ -40,6 +40,19 @@ class PackageTests(unittest.TestCase):
       self.assertEqual(subprocess.check_output(['git','-C',str(target),'rev-parse','HEAD'],text=True).strip(),sha)
       with self.assertRaises(ValueError):materialize(pkg,target,root/'boot')
 
+  def test_lfs_corruption_is_rejected(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      pkg = Path(tmp)
+      (pkg/'parent.bundle').write_bytes(b'bundle')
+      oid = '0'*64
+      (pkg/'lfs').mkdir()
+      (pkg/'lfs'/oid).write_bytes(b'corrupted')
+      repo = {'path':'.','bundle':'parent.bundle','sha':'1'*40,
+              'sha256':hashlib.sha256(b'bundle').hexdigest(),
+              'lfs':[{'name':'models/test.onnx','oid':oid,'size':9}]}
+      (pkg/'package.json').write_text(json.dumps({'repos':[repo]}))
+      with self.assertRaises(ValueError): verify_package(pkg)
+
   def test_manifest_cannot_escape_package(self):
     with tempfile.TemporaryDirectory() as tmp:
       pkg=Path(tmp); (pkg/'package.json').write_text(json.dumps({'repos':[{'path':'../escape','bundle':'../escape','sha':'0'*40,'sha256':'0'*64}]}))

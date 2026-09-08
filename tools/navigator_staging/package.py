@@ -21,6 +21,7 @@ def package(parent, sources, output):
     mode,kind,rest=line.split(' ',2)
     if mode=='160000':sha,path=rest.split('\t');pins[path]=sha
   repos=[]
+  (output/'lfs').mkdir()
   for path,sha in pins.items():
     src=parent if path=='.' else Path(sources[path])
     git(src,'cat-file','-e',sha+'^{commit}')
@@ -34,7 +35,19 @@ def package(parent, sources, output):
       git(bare,'bundle','create',str(bundle),'refs/heads/package')
       check=Path(temp)/'verify.git';subprocess.run(['git','init','--bare','-q',str(check)],check=True)
       subprocess.run(['git','-C',str(check),'bundle','verify',str(bundle)],check=True)
-    repos.append({'path':path,'sha':sha,'bundle':bundle.name,'sha256':digest(bundle),'bytes':bundle.stat().st_size})
+    lfs = json.loads(git(src,'lfs','ls-files','--long','--json',sha))['files'] or []
+    payloads=[]
+    for entry in lfs:
+      source=src/entry['name']; oid=entry['oid']
+      if source.stat().st_size != entry['size'] or digest(source)!=oid:
+        raise ValueError(f'Missing or changed frozen LFS payload: {source}')
+      # Also verify the pointer belongs to this exact commit, not another checkout.
+      pointer=git(src,'show',sha+':'+entry['name'])
+      if f'oid sha256:{oid}' not in pointer: raise ValueError('LFS pointer mismatch')
+      dest=output/'lfs'/oid
+      if not dest.exists(): shutil.copyfile(source,dest)
+      payloads.append({'name':entry['name'],'oid':oid,'size':entry['size']})
+    repos.append({'lfs':payloads,'path':path,'sha':sha,'bundle':bundle.name,'sha256':digest(bundle),'bytes':bundle.stat().st_size})
   models={}
   for name in git(parent,'ls-files','openpilot/selfdrive/modeld/models/*.onnx').splitlines():
     p=parent/name
@@ -48,7 +61,7 @@ def package(parent, sources, output):
   (output/'package.json').write_text(json.dumps(manifest,indent=2)+'\n')
   for name in ('prepare.py','build_only.sh','verify_checkout.py','transfer.sh','README.md','inventory_readonly.sh'):
     shutil.copy2(parent/'tools/navigator_staging'/name,output/name)
-  (output/'SHA256SUMS').write_text(''.join(f'{digest(p)}  {p.name}\n' for p in sorted(output.iterdir()) if p.is_file()))
+  (output/'SHA256SUMS').write_text(''.join(f'{digest(p)}  {p.relative_to(output)}\n' for p in sorted(output.rglob('*')) if p.is_file()))
   print(json.dumps(manifest,indent=2))
 
 if __name__=='__main__':
