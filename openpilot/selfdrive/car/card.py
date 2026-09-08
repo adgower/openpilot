@@ -2,6 +2,7 @@
 import os
 import time
 import threading
+import uuid
 
 import openpilot.cereal.messaging as messaging
 
@@ -20,6 +21,8 @@ from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
+from openpilot.selfdrive.car.navigator_a3_runtime import (RuntimeBridge, prepare_controller, control_for_apply,
+                                                       diagnostic_json, observe_publication)
 
 REPLAY = "REPLAY" in os.environ
 
@@ -149,6 +152,12 @@ class Car:
     self.params.put("CarParamsCache", cp_bytes)
     self.params.put("CarParamsPersistent", cp_bytes)
 
+    self.navigator_a3_bridge = None
+    experiment = getattr(self.CI.CC, 'navigator_a3', None)
+    if experiment is not None and experiment.config.mode != 'a2':
+      expected = [(str(p.safetyModel), p.safetyParam, self.CP.alternativeExperience) for p in self.CP.safetyConfigs]
+      self.navigator_a3_bridge = RuntimeBridge(experiment.config.mode, expected, str(uuid.uuid4()), 'recorded' if REPLAY else 'live')
+
     self.v_cruise_helper = VCruiseHelper(self.CP)
 
     self.is_metric = self.params.get_bool("IsMetric")
@@ -170,6 +179,21 @@ class Car:
     RD: structs.RadarDataT | None = self.RI.update(can_list)
 
     self.sm.update(0)
+
+    if self.navigator_a3_bridge is not None:
+      bridge = self.navigator_a3_bridge
+      bridge.active_request = bool(self.sm['carControl'].latActive)
+      for raw in can_strs:
+        message = messaging.log_from_bytes(raw)
+        for packet in message.can:
+          src = int(packet.src)
+          if src >= 128:
+            kind = 'returned' if 128 <= src < 136 else 'rejected' if 192 <= src < 200 else 'unknown'
+            bus = src - 128 if kind == 'returned' else src - 192 if kind == 'rejected' else None
+            bridge.packet(kind, int(message.logMonoTime), bool(message.valid), packet.address, packet.dat, bus, src)
+      if self.sm.updated['pandaStates']:
+        for idx, panda in enumerate(self.sm['pandaStates']):
+          bridge.panda(int(self.sm.logMonoTime['pandaStates']), bool(self.sm.valid['pandaStates']), idx, panda)
 
     can_rcv_valid = len(can_strs) > 0
 
@@ -205,6 +229,13 @@ class Car:
     co_send = messaging.new_message('carOutput')
     co_send.valid = self.sm.all_checks(['carControl'])
     co_send.carOutput.actuatorsOutput = self.last_actuators_output
+    if self.navigator_a3_bridge is not None:
+      status = co_send.carOutput.navigatorA3
+      status.version = 1
+      status.mode = self.navigator_a3_bridge.mode
+      status.inhibited = self.navigator_a3_bridge.disengagement_requested
+      status.reason = self.navigator_a3_bridge.fault_reason or ''
+      status.diagnosticsJson = diagnostic_json(self.CI.CC, self.navigator_a3_bridge)
     self.pm.send('carOutput', co_send)
 
     # kick off controlsd step while we actuate the latest carControl packet
@@ -228,14 +259,24 @@ class Car:
       # Initialize CarInterface, once controls are ready
       # TODO: this can make us miss at least a few cycles when doing an ECU knockout
       self.CI.init(self.CP, *self.can_callbacks)
+      if self.navigator_a3_bridge is not None:
+        self.navigator_a3_bridge.controls_ready = True
       # signal pandad to switch to car safety mode
       self.params.put_bool("ControlsReady", True)
 
     if self.sm.all_alive(['carControl']):
       # send car controls over can
       now_nanos = self.can_log_mono_time if REPLAY else int(time.monotonic() * 1e9)
-      self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos)
-      self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
+      applied_cc = CC
+      if self.navigator_a3_bridge is not None:
+        prepare_controller(self.CI, CS, self.sm, self.navigator_a3_bridge)
+        applied_cc = control_for_apply(CC, self.navigator_a3_bridge)
+      self.last_actuators_output, can_sends = self.CI.apply(applied_cc, now_nanos)
+      send_msg = can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid)
+      self.pm.send('sendcan', send_msg)
+      if self.navigator_a3_bridge is not None:
+        publication = messaging.log_from_bytes(send_msg)
+        observe_publication(self.navigator_a3_bridge, publication, replay=REPLAY)
 
       self.CC_prev = CC
 

@@ -1,4 +1,6 @@
-# Core path-angle experiment: offline handoff
+# Core path-angle experiment: checkpoint history
+
+Current integration: [integrated checkpoint](integrated-checkpoint.md). The historical offline checkpoint below predates production wiring; active Angle remains blocked.
 
 This implements the feasible offline experiment on frozen A2-WB. **It is not an installable Angle controller.** The strategy and independent decoded-wire evaluator are deliberately unreachable from production control and firmware. The physical command-to-motion hypothesis is unvalidated; enabling a selector cannot authorize it. No device access, deployment, push or merge occurred.
 
