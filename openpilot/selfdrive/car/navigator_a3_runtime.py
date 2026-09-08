@@ -184,7 +184,7 @@ def diagnostic_json(controller, bridge):
   d = bridge.diagnostics()
   d['controller'] = controller.navigator_a3.diagnostic
   d['controller_proposal_provenance'] = 'synthetic'
-  d['published_frames_provenance'] = 'synthetic' if bridge.observer.provenance == 'recorded' else 'live'
+  d['published_frames_provenance'] = 'live' if bridge.observer.provenance == 'live' else 'synthetic'
   # Exact candidates can be reconstructed from normal CAN logs when long lists
   # would make real-time diagnostic serialization unbounded in practice.
   for row in d['transport']:
