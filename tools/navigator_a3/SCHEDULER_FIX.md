@@ -1,5 +1,7 @@
 # Emission-based Angle shadow scheduler
 
+> Timing provenance correction: the strict 50,000 us gate described below belongs to our historical host-only evaluator. It is not an established Ford/EPS requirement. The scheduler remains a deliberate host policy. See [TIMING_CONTRACT.md](TIMING_CONTRACT.md) for the separate aggregate-rate experiment; prior results and artifacts remain historical evidence.
+
 Base parent `4b89fd3d4b59d5b6f1a41342d5f96a4e4bf9b03b`, child `0322627c07c4993e631b3974dc9bf66ac9143362`.
 
 ## Implemented behavior

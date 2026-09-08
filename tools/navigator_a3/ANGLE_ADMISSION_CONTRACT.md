@@ -1,5 +1,7 @@
 # Core path-angle admission and inactive/handoff contract
 
+> Timing provenance correction: the strict 50,000 us gate described below belongs to our historical host-only evaluator. It is not an established Ford/EPS requirement. The scheduler remains a deliberate host policy. See [TIMING_CONTRACT.md](TIMING_CONTRACT.md) for the separate aggregate-rate experiment; prior results and artifacts remain historical evidence.
+
 Status: executable offline contract; **active Angle admission is not approved or implemented by this checkpoint**.
 
 Frozen parent: `7f574ce4726413c091294ed3803148c9c77706e7`. Paired child: `0322627c07c4993e631b3974dc9bf66ac9143362`. Chestnut, Navigator parameters, production controller, schema and firmware remain unchanged.
