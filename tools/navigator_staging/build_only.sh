@@ -8,8 +8,8 @@ root=$(cd "$1" && pwd -P)
 [[ "$(uname -s)" == Linux && "$(uname -m)" == aarch64 && -f /AGNOS ]] || { echo 'Requires AGNOS device'; exit 2; }
 [[ "$(cat /VERSION)" == 19.7 ]] || { echo 'STOP: requires AGNOS 19.7; does not update the OS'; exit 2; }
 [[ "$(cat /data/params/d/IsOffroad)" == 1 ]] || { echo 'Requires offroad'; exit 2; }
-if ps -eo args= | grep -E '[m]odeld.py|[d]monitoringmodeld.py|[s]elfdrive.modeld.modeld|[s]elfdrive.modeld.dmonitoringmodeld' >/dev/null; then
-  echo 'STOP: model processes are running; inspect and stop separately before build'; exit 2
+if ! python3 "$root/tools/navigator_staging/check_model_processes.py"; then
+  echo 'STOP: model process check failed or model processes are running; inspect before build'; exit 2
 fi
 command -v uv >/dev/null || { echo 'Missing uv; inventory and provision separately'; exit 2; }
 python3 "$root/tools/navigator_staging/verify_checkout.py" --root "$root"
