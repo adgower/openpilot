@@ -133,8 +133,15 @@ def test_real_card_serialized_shadow_survives_a2_rejection_but_not_later_permiss
       status = shadow.pm.read('carOutput').carOutput.navigatorA3
       diagnostic = json.loads(status.diagnosticsJson)
       assert status.version == 1  # unchanged cereal wire shape
-      assert diagnostic['schema_version'] == diagnostic['controller']['schema_version'] == 2
+      assert diagnostic['schema_version'] == 2  # transport envelope unchanged
+      assert diagnostic['controller']['schema_version'] == 3
       assert status.reason == 'direct_steering_rejection' and not status.inhibited
-      assert diagnostic['controller']['output']['mode'] == (1 if step == 5 else 0)
+      output = diagnostic['controller']['output']
+      if step == 5:
+        assert output['mode'] == 1
+      else:
+        assert output is None  # persistent inhibition emits no repeated neutral pulse
+        assert diagnostic['controller']['proposed_frame'] is None
       assert diagnostic['calculation_fault_reason'] == (None if step == 5 else 'permission_unavailable')
-      assert not diagnostic['controller']['output']['transmission_allowed']
+      if output is not None:
+        assert not output['transmission_allowed']

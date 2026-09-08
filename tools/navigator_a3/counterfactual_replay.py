@@ -20,6 +20,7 @@ from opendbc.car.ford.navigator_a3 import Inputs, State, PROFILES, update, encod
 
 def replay_rows(rows):
   states = {}
+  schedulers = {}
   previous = {}
   packer = CANPacker('ford_lincoln_base_pt')
   for row in rows:
@@ -49,8 +50,9 @@ def replay_rows(rows):
         raise ValueError('duplicate_or_regressing_controller_time')
       if identity in states and states[identity][0] != profile:
         raise ValueError('profile_changed')
+      scheduler_version = c.get('schema_version', 1) >= 3
       counter = row.get('counter')
-      if type(counter) is not int or not 0 <= counter <= 15:
+      if not scheduler_version and (type(counter) is not int or not 0 <= counter <= 15):
         raise ValueError('missing_recorded_counter')
       # Other original invalidity stays invalid. Never modify the historical dict.
       if historical.get('schema_version', 1) >= 2 or c.get('schema_version', 1) >= 2:
@@ -63,19 +65,29 @@ def replay_rows(rows):
         inferred_valid = ev['event_valid'] and (sample.valid or c.get('evidence_fault_reason') == 'direct_steering_rejection')
         result['validity_policy'] = 'legacy_version1_inferred_source_validity'
       synthetic_input = replace(sample, valid=inferred_valid)
-      state = states.get(identity, (profile, State()))[1]
-      proposal = update(PROFILES[profile], state, synthetic_input)
-      states[identity] = (profile, proposal.state)
+      if scheduler_version:
+        from opendbc.car.ford.navigator_a3_scheduler import ShadowScheduler
+        scheduler = schedulers.setdefault(identity, ShadowScheduler())
+        decision = scheduler.step(PROFILES[profile], synthetic_input)
+        proposal, counter = decision.output, decision.proposal_counter
+        result['synthetic_scheduler'] = {k: v for k, v in asdict(decision).items() if k != 'output'}
+        states[identity] = (profile, scheduler.state)
+      else:
+        state = states.get(identity, (profile, State()))[1]
+        proposal = update(PROFILES[profile], state, synthetic_input)
+        states[identity] = (profile, proposal.state)
       previous[identity] = sample.now_ns
-      address, data, bus = encode_offline(packer, proposal, counter)
-      result.update(synthetic=asdict(proposal), synthetic_input=asdict(synthetic_input),
-                    synthetic_frame={'address': address, 'data': data.hex(), 'bus': bus})
+      result['synthetic_input'] = asdict(synthetic_input)
+      if proposal is not None:
+        address, data, bus = encode_offline(packer, proposal, counter)
+        result.update(synthetic=asdict(proposal), synthetic_frame={'address': address, 'data': data.hex(), 'bus': bus})
     except (KeyError, TypeError, ValueError) as exc:
       result['unsupported_reason'] = str(exc)
       # A hole cannot inherit unverified history. Next supported sample begins
       # neutral and retains its native timestamp (never compress the gap).
       if str(exc) != 'duplicate_or_regressing_controller_time':
         states.pop(identity, None)
+        schedulers.pop(identity, None)
     yield result
 
 
@@ -173,7 +185,13 @@ def main():
   with (args.output / 'counterfactual-timeline.jsonl').open('w') as target:
     for result in replay_rows(extract_events(merge_segments(raw_segments(args.logs)), args.route_id)):
       counts['rows'] += 1
-      counts['unsupported:' + result['unsupported_reason'] if result['unsupported_reason'] else 'synthetic:' + result['synthetic']['reason']] += 1
+      if result['unsupported_reason']:
+        outcome = 'unsupported:' + result['unsupported_reason']
+      elif result['synthetic'] is None:
+        outcome = 'scheduler:' + result['synthetic_scheduler']['reason']
+      else:
+        outcome = 'synthetic:' + result['synthetic']['reason']
+      counts[outcome] += 1
       target.write(json.dumps(result, allow_nan=False, separators=(',', ':')) + '\n')
   import opendbc.car.ford.navigator_a3 as strategy
   strategy_path = Path(strategy.__file__).resolve()

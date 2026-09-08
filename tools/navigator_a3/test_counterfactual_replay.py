@@ -127,3 +127,26 @@ def test_v2_calculation_fault_cannot_be_removed_by_legacy_rejection_inference():
   result = list(replay_rows([r]))[0]
   assert result['synthetic']['mode'] == 0
   assert not result['synthetic_input']['valid']
+
+
+def test_v3_waiting_does_not_invent_frame_or_require_a2_counter():
+  from tools.navigator_a3.counterfactual_replay import replay_rows
+  rows = []
+  for t in (1_000_000_000, 1_049_000_000, 1_059_000_000):
+    r = row(t)
+    r['diagnostic']['schema_version'] = 3
+    c = r['diagnostic']['controller']
+    c.update(schema_version=3, calculation_eligible=True, calculation_fault_reason=None,
+             actual_frame=None, proposed_frame=None, output=None)
+    c['input']['valid'] = True
+    r['counter'] = None
+    rows.append(r)
+  original = copy.deepcopy(rows)
+  result = list(replay_rows(rows))
+  assert result[0]['synthetic_frame'] is not None
+  assert result[1]['unsupported_reason'] is None
+  assert result[1]['synthetic'] is None and result[1]['synthetic_frame'] is None
+  assert result[1]['synthetic_scheduler']['waiting']
+  assert result[2]['synthetic_scheduler']['proposal_counter'] == 1
+  assert rows == original
+  assert all(r['synthetic_transport_acceptance'] == 'unknown' for r in result)
