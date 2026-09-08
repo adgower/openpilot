@@ -1,7 +1,8 @@
 """Offline common-input path-angle counterfactual; consumes existing diagnostic CSVs.
 
-No model prediction is used as controller input. Recorded motion is context only,
-not a prediction of A3 performance. No device or CAN transport dependency.
+No model prediction is used as controller input. Recorded yaw and raw speed
+supply the measurement limit; historical motion is not an A3 performance
+prediction. No device or CAN transport dependency.
 """
 import argparse
 from bisect import bisect_right
@@ -18,7 +19,7 @@ from opendbc.car.ford.navigator_a3 import Inputs, State, PROFILES, update, encod
 INPUT = 'carControl.actuators.curvature'
 CONTEXT = ['carState.vEgoRaw', 'carControl.latActive', 'carState.steeringPressed', 'carState.steeringAngleDeg',
            'derived.yawCurvature', 'carOutput.actuatorsOutput.curvature', 'modelV2.action.desiredCurvature',
-           'lateralManeuverPlan.desiredCurvature', 'carState.vehicleSensorsInvalid']
+           'lateralManeuverPlan.desiredCurvature', 'carState.vehicleSensorsInvalid', 'carState.yawRate']
 
 
 def replay(path):
@@ -43,11 +44,14 @@ def replay(path):
         continue
       last = t
       context = {}
+      measurement_sources = {}
       stamps = [t]
       good = valid and k is not None
       for s in CONTEXT:
         i = bisect_right(times.get(s, []), t) - 1
         row = series[s][i] if i >= 0 else None
+        if s in ('carState.yawRate', 'carState.vEgoRaw'):
+          measurement_sources[s] = row
         ok = row is not None and row[2] and row[1] is not None and 0 <= t - row[0] <= 100_000_000
         context[s] = row[1] if ok else None
         if s in CONTEXT[:3] + ['carState.vehicleSensorsInvalid']:
@@ -55,13 +59,27 @@ def replay(path):
           if row:
             stamps.append(row[0])
       good &= context['carState.vehicleSensorsInvalid'] == 0
+      yaw = measurement_sources['carState.yawRate']
+      speed = measurement_sources['carState.vEgoRaw']
+      measured, measurement_ns, measurement_valid = None, None, False
+      if yaw is not None and speed is not None and yaw[1] is not None and speed[1] is not None:
+        measured = -yaw[1] / max(speed[1], .1)
+        measurement_ns = min(yaw[0], speed[0])
+        measurement_valid = yaw[2] and speed[2]
       sample = Inputs(t, min(stamps), k or 0., context['carState.vEgoRaw'] or 0.,
-                      bool(context['carControl.latActive']), bool(context['carState.steeringPressed']), bool(good))
+                      bool(context['carControl.latActive']), bool(context['carState.steeringPressed']), bool(good),
+                      measured_curvature_inv_m=measured, measurement_ns=measurement_ns,
+                      measurement_valid=measurement_valid)
       for name, profile in PROFILES.items():
+        before = states[name]
         output = update(profile, states[name], sample)
         states[name] = output.state
         addr, data, bus = encode_offline(packer, output, (len(result) // len(PROFILES)) % 16)
         result.append({'run': run, 't_ns': t, 'input_curvature_inv_m': k, 'source_valid': good,
+                       'proposal_before_path_angle_rad': before.path_angle_rad,
+                       'proposal_before_equivalent_curvature_inv_m': before.equivalent_curvature_inv_m,
+                       'proposal_after_path_angle_rad': output.state.path_angle_rad,
+                       'proposal_after_equivalent_curvature_inv_m': output.state.equivalent_curvature_inv_m,
                        **context, **{k: v for k, v in asdict(output).items() if k != 'state'},
                        'wire_path_angle_rad': -output.path_angle_rad, 'address': addr, 'bus': bus, 'data_hex': data.hex(),
                        'safety_admission': 'not evaluated in this replay; see compiled audit'})
@@ -72,9 +90,12 @@ def main():
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument('--input', type=Path, required=True)
   parser.add_argument('--admission', type=Path, help='Compiled raw-RX admission.json from this timeline')
+  parser.add_argument('--run', help='Render one diagnostic run without combining overlapping maneuver windows')
   parser.add_argument('--output', type=Path, required=True)
   args = parser.parse_args()
   rows = replay(args.input)
+  if args.run is not None:
+    rows = [row for row in rows if row['run'] == args.run]
   if not rows:
     raise ValueError('No bounded general-controls input samples found in diagnostic CSV')
   admissions = {}
@@ -93,8 +114,10 @@ def main():
   counts = {name: {reason: sum(r['profile'] == name and r['reason'] == reason for r in rows)
                    for reason in sorted({r['reason'] for r in rows})} for name in PROFILES}
   metadata = {'label': 'core path-angle experiment', 'source': str(args.input),
+              'selected_run': args.run,
               'source_sha256': hashlib.sha256(args.input.read_bytes()).hexdigest(), 'donor': DONOR_REVISION,
               'profiles': {name: asdict(p) for name, p in PROFILES.items()}, 'counts': counts,
+              'measurement_source': '-carState.yawRate/max(carState.vEgoRaw,0.1); native as-of inputs, oldest dependency timestamp',
               'limits': ['No A3 motion recorded', 'No device access', 'Safety admission not inferred from Python limits',
                          'As-of joins only, maximum age 100 ms; missing validity becomes inactive',
                          'Replayed cadence approximates 20 Hz from logged timestamps; not original frame phase']}
@@ -106,6 +129,9 @@ def main():
     ('Curvature (1/m)', [('input_curvature_inv_m', '#b52b25'), ('modelV2.action.desiredCurvature', '#9962ab'),
                        ('lateralManeuverPlan.desiredCurvature', '#9962ab'), ('carOutput.actuatorsOutput.curvature', '#dd9820'),
                        ('derived.yawCurvature', '#187246')]),
+    ('Measurement-limited target / final algebraic equivalent (1/m)',
+     [('measurement_limited_curvature_inv_m', '#b52b25'), ('equivalent_curvature_inv_m', '#2768c0')]),
+    ('Measurement age (ns); missing means unavailable', [('measurement_age_ns', '#2768c0')]),
     ('Path angle (rad)', [('raw_path_angle_rad', '#999'), ('path_angle_rad', '#2768c0'), ('wire_path_angle_rad', '#187246')]),
     ('Measured steering angle (deg)', [('carState.steeringAngleDeg', '#187246')]),
     ('Vehicle speed (m/s)', [('carState.vEgoRaw', '#2768c0')]),
@@ -152,7 +178,8 @@ def main():
     + '<style>body{font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px}'
     + 'svg{width:100%;background:#f6f7fa}pre{white-space:pre-wrap}text{font-size:12px}</style>'
     + '<h1>Core path-angle experiment — offline commands</h1><p><b>No A3 handling result or deployment readiness is established.</b> '
-    + 'Every strategy receives the same recorded bounded general-controls curvature. Model and yaw signals are context only. '
+    + 'Every strategy receives the same recorded bounded general-controls curvature. Model predictions are context only; '
+    + 'recorded yaw-based curvature supplies the stock-like measurement limit above 9 m/s. '
     + 'Immediate driver press produces inactive output; no automatic recovery pulse is implemented. '
     + 'Stock safety still blocks path angle. See the independent compiled admission audit.</p>'
     + '<p><a href="candidate-timeline.csv">Full common-clock timeline, context and encoded CAN bytes</a> · '

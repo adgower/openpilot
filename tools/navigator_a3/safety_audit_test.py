@@ -143,7 +143,8 @@ def test_core_commands_and_driver_reentry_pass_unchanged_compiled_checks(variant
     elif row['address'] == 0x3D6:
       lib.audit_controls(1)
       t = row['time_us'] * 1000
-      output = update(profile, state, Inputs(t, t, sign * .001, speed, True, frame in (20, 21)))
+      output = update(profile, state, Inputs(t, t, sign * .001, speed, True, frame in (20, 21),
+                                            measured_curvature_inv_m=0., measurement_ns=t, measurement_valid=True))
       state = output.state
       addr, wire, bus = encode_offline(packer, output, frame % 16)
       assert output.mode == (0 if frame in (20, 21) else 1)
