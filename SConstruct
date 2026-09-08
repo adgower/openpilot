@@ -233,7 +233,7 @@ Export('envCython', 'np_version')
 Export('env', 'arch', 'acados', 'ffmpeg_libs')
 
 # Setup cache dir
-cache_dir = '/data/scons_cache' if arch == "comma_arm64" else '/tmp/scons_cache'
+cache_dir = os.environ.get('NAVIGATOR_STAGING_SCONS_CACHE') or ('/data/scons_cache' if arch == "comma_arm64" else '/tmp/scons_cache')
 cache_size_limit = 4e9 if "CI" in os.environ else 2e9
 CacheDir(cache_dir)
 Clean(["."], cache_dir)
