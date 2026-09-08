@@ -1,0 +1,512 @@
+{
+  "route_id": "00000003--371271599e",
+  "source_segment": 4,
+  "source_file": "00000003--371271599e--4/rlog.zst",
+  "source_sha256": "d4e20cbf63e2b5c025493478e94318c37118364e96d4c5753a2cb1c4e2254e85",
+  "frozen_parent": "86b4a4cbb",
+  "frozen_opendbc": "01bea343a7f7d4e4f8a1947539abacb59ab8c278",
+  "scope": "Two native postfault carOutput diagnostics and preceding native carControl evidence; carControl fields projected to the bounded curvature and latActive used by replay. Original carOutput diagnostic dictionaries retained verbatim. Starts at driver press which resets synthetic strategy state.",
+  "events": [
+    {
+      "kind": "carControl",
+      "t_ns": 542000770465,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0015671600122004747
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542011072798,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0015388171887025237
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542023004427,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0015101489843800664
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542033124801,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0014500267570838332
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542040992301,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0014217672869563103
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542050759173,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0013365362538024783
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542063987428,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0013082824880257249
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542071136313,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0013084502425044775
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542083934771,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0012735173804685473
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542090548507,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0012163257924839854
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542101230797,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.001159155392087996
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542112785124,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.001045131590217352
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542121769949,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0010453267022967339
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542133835521,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0010095977922901511
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542140907487,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0009813605574890971
+        },
+        "latActive": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542150227482,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0007717283442616463
+        },
+        "latActive": true
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542164025359,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0006425955798476934
+        },
+        "latActive": true
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542171379846,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0006425955798476934
+        },
+        "latActive": true
+      }
+    },
+    {
+      "kind": "carOutput",
+      "t_ns": 542178560653,
+      "valid": true,
+      "data": {
+        "schema_version": 1,
+        "stream_id": "50ae464c-cb91-42f3-afa2-6b803940b032",
+        "provenance": "live",
+        "fault_reason": "direct_steering_rejection",
+        "inhibited": false,
+        "transport": [
+          {
+            "route_id": "50ae464c-cb91-42f3-afa2-6b803940b032",
+            "provenance": "live",
+            "order": 817058,
+            "kind": "published",
+            "t_ns": 542167808216,
+            "valid": true,
+            "address": 982,
+            "data_hex": "143a790fa2008010",
+            "dlc": 8,
+            "bus": 0,
+            "src": 0,
+            "event_type": "published",
+            "receiver_acceptance": "unknown",
+            "candidate_orders": [],
+            "attribution": "publication_only",
+            "publication_to_observation_ns": null,
+            "coverage_incomplete": true,
+            "direct_steering_rejection": false,
+            "counter_delta": null,
+            "counter_interpretation": "unknown",
+            "permission_lost": false,
+            "configuration_changed": false,
+            "health_coverage_gap": false,
+            "retained_candidate_count": 0
+          },
+          {
+            "route_id": "50ae464c-cb91-42f3-afa2-6b803940b032",
+            "provenance": "live",
+            "order": 817076,
+            "kind": "returned",
+            "t_ns": 542173822384,
+            "valid": true,
+            "address": 982,
+            "data_hex": "143a790fa2008010",
+            "dlc": 8,
+            "bus": 0,
+            "src": 128,
+            "event_type": "returned",
+            "receiver_acceptance": "unknown",
+            "candidate_orders": [
+              817058
+            ],
+            "attribution": "incomplete",
+            "publication_to_observation_ns": null,
+            "coverage_incomplete": true,
+            "direct_steering_rejection": false,
+            "counter_delta": null,
+            "counter_interpretation": "unknown",
+            "permission_lost": false,
+            "configuration_changed": false,
+            "health_coverage_gap": false,
+            "wire_mode": 1,
+            "retained_candidate_count": 1
+          }
+        ],
+        "dropped_diagnostics": 0,
+        "coverage_incomplete": true,
+        "configuration_armed": true,
+        "controller": {
+          "config": {
+            "mode": "shadow",
+            "profile": "expedition-provisional-v1"
+          },
+          "input": {
+            "now_ns": 542166682404,
+            "source_ns": 542164025359,
+            "curvature_inv_m": 0.0006425955798476934,
+            "speed_mps": 15.586111068725586,
+            "active": true,
+            "driver_pressed": true,
+            "valid": false,
+            "measured_curvature_inv_m": 0.0018093031930913011,
+            "measurement_ns": 542155840445,
+            "measurement_valid": true
+          },
+          "output": {
+            "state": {
+              "path_angle_rad": 0.0,
+              "last_ns": 542166682404,
+              "equivalent_curvature_inv_m": null
+            },
+            "mode": 0,
+            "path_angle_rad": 0.0,
+            "raw_path_angle_rad": 0.0,
+            "effective_gain": 0.0,
+            "reason": "invalid",
+            "profile": "expedition-provisional-v1",
+            "transmission_allowed": false,
+            "requested_gain": 0.0,
+            "equivalent_curvature_inv_m": null,
+            "measured_curvature_inv_m": 0.0018093031930913011,
+            "measurement_age_ns": 10841959,
+            "measurement_limited_curvature_inv_m": null
+          },
+          "fault_reason": null,
+          "evidence_fault_reason": "direct_steering_rejection",
+          "proposed_frame": {
+            "address": 982,
+            "data": "041b7d0fa2008010",
+            "bus": 0
+          },
+          "actual_frame": {
+            "address": 982,
+            "data": "143a790fa2008010",
+            "bus": 0
+          }
+        },
+        "controller_proposal_provenance": "synthetic",
+        "published_frames_provenance": "live",
+        "nonfinite_values_present": false
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542183969577,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0006425955798476934
+        },
+        "latActive": true
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542190276005,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0006425955798476934
+        },
+        "latActive": true
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542200623331,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0006425955798476934
+        },
+        "latActive": true
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542210918270,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0006006233161315322
+        },
+        "latActive": true
+      }
+    },
+    {
+      "kind": "carControl",
+      "t_ns": 542222633360,
+      "valid": true,
+      "data": {
+        "actuators": {
+          "curvature": 0.0006006233161315322
+        },
+        "latActive": true
+      }
+    },
+    {
+      "kind": "carOutput",
+      "t_ns": 542228274965,
+      "valid": true,
+      "data": {
+        "schema_version": 1,
+        "stream_id": "50ae464c-cb91-42f3-afa2-6b803940b032",
+        "provenance": "live",
+        "fault_reason": "direct_steering_rejection",
+        "inhibited": false,
+        "transport": [
+          {
+            "route_id": "50ae464c-cb91-42f3-afa2-6b803940b032",
+            "provenance": "live",
+            "order": 817223,
+            "kind": "published",
+            "t_ns": 542219053398,
+            "valid": true,
+            "address": 982,
+            "data_hex": "1437794fa2008012",
+            "dlc": 8,
+            "bus": 0,
+            "src": 0,
+            "event_type": "published",
+            "receiver_acceptance": "unknown",
+            "candidate_orders": [],
+            "attribution": "publication_only",
+            "publication_to_observation_ns": null,
+            "coverage_incomplete": true,
+            "direct_steering_rejection": false,
+            "counter_delta": null,
+            "counter_interpretation": "unknown",
+            "permission_lost": false,
+            "configuration_changed": false,
+            "health_coverage_gap": false,
+            "retained_candidate_count": 0
+          },
+          {
+            "route_id": "50ae464c-cb91-42f3-afa2-6b803940b032",
+            "provenance": "live",
+            "order": 817230,
+            "kind": "returned",
+            "t_ns": 542224356188,
+            "valid": true,
+            "address": 982,
+            "data_hex": "1437794fa2008012",
+            "dlc": 8,
+            "bus": 0,
+            "src": 128,
+            "event_type": "returned",
+            "receiver_acceptance": "unknown",
+            "candidate_orders": [
+              817223
+            ],
+            "attribution": "incomplete",
+            "publication_to_observation_ns": null,
+            "coverage_incomplete": true,
+            "direct_steering_rejection": false,
+            "counter_delta": null,
+            "counter_interpretation": "unknown",
+            "permission_lost": false,
+            "configuration_changed": false,
+            "health_coverage_gap": false,
+            "wire_mode": 1,
+            "retained_candidate_count": 1
+          }
+        ],
+        "dropped_diagnostics": 0,
+        "coverage_incomplete": true,
+        "configuration_armed": true,
+        "controller": {
+          "config": {
+            "mode": "shadow",
+            "profile": "expedition-provisional-v1"
+          },
+          "input": {
+            "now_ns": 542218325927,
+            "source_ns": 542210918270,
+            "curvature_inv_m": 0.0006006233161315322,
+            "speed_mps": 15.547222137451172,
+            "active": true,
+            "driver_pressed": false,
+            "valid": false,
+            "measured_curvature_inv_m": 0.001363587603605631,
+            "measurement_ns": 542214530104,
+            "measurement_valid": true
+          },
+          "output": {
+            "state": {
+              "path_angle_rad": 0.0,
+              "last_ns": 542218325927,
+              "equivalent_curvature_inv_m": null
+            },
+            "mode": 0,
+            "path_angle_rad": 0.0,
+            "raw_path_angle_rad": 0.0,
+            "effective_gain": 0.0,
+            "reason": "invalid",
+            "profile": "expedition-provisional-v1",
+            "transmission_allowed": false,
+            "requested_gain": 0.0,
+            "equivalent_curvature_inv_m": null,
+            "measured_curvature_inv_m": 0.001363587603605631,
+            "measurement_age_ns": 3795823,
+            "measurement_limited_curvature_inv_m": null
+          },
+          "fault_reason": null,
+          "evidence_fault_reason": "direct_steering_rejection",
+          "proposed_frame": {
+            "address": 982,
+            "data": "041a7d0fa2008012",
+            "bus": 0
+          },
+          "actual_frame": {
+            "address": 982,
+            "data": "1437794fa2008012",
+            "bus": 0
+          }
+        },
+        "controller_proposal_provenance": "synthetic",
+        "published_frames_provenance": "live",
+        "nonfinite_values_present": false
+      }
+    }
+  ]
+}
