@@ -74,3 +74,12 @@ class ScriptGuards(unittest.TestCase):
     self.assertIn('Only A2/shadow staging permitted', result.stdout)
 
 if __name__=='__main__':unittest.main()
+
+
+def test_configuration_records_selected_pins():
+  from tools.navigator_staging import package
+  assert hasattr(package, 'configuration')
+  result = package.configuration({'.': 'a'*40, 'opendbc_repo': 'b'*40})
+  assert result['base_parent'] == 'a'*40
+  assert result['child'] == 'b'*40
+  assert result['mode'] == 'shadow'

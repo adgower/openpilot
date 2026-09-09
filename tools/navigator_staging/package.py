@@ -14,6 +14,12 @@ def digest(p):
   with p.open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
 
 
+def configuration(pins):
+  return {'agnos':'19.7','mode':'shadow','profile':'expedition-provisional-v1','wheelbase_m':3.1115,
+          'mass':'retain A2 baseline; no new mass override','fingerprint':'FORD_EXPEDITION_MK4',
+          'base_parent':pins['.'],'child':pins['opendbc_repo']}
+
+
 def package(parent, sources, output):
   output.mkdir(parents=True,exist_ok=False)
   pins={'.':git(parent,'rev-parse','HEAD')}
@@ -54,9 +60,7 @@ def package(parent, sources, output):
     with p.open('rb') as f: prefix=f.read(45)
     if prefix.startswith(b'version https://git-lfs'):raise ValueError('Unmaterialized model LFS pointer')
     models[name]={'sha256':digest(p),'bytes':p.stat().st_size}
-  config={'agnos':'19.7','mode':'shadow','profile':'expedition-provisional-v1','wheelbase_m':3.1115,
-          'mass':'retain A2 baseline; no new mass override','fingerprint':'FORD_EXPEDITION_MK4',
-          'base_parent':'18fd1a6505e072710514e723dae2edc65c0e3355','child':'01bea343a7f7d4e4f8a1947539abacb59ab8c278'}
+  config=configuration(pins)
   manifest={'schema_version':1,'repos':repos,'models':models,'configuration':config,'status':'source package; target build pending'}
   (output/'package.json').write_text(json.dumps(manifest,indent=2)+'\n')
   for name in ('prepare.py','build_only.sh','verify_checkout.py','transfer.sh','README.md','inventory_readonly.sh'):

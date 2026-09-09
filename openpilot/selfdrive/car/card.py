@@ -269,7 +269,7 @@ class Car:
       now_nanos = self.can_log_mono_time if REPLAY else int(time.monotonic() * 1e9)
       applied_cc = CC
       if self.navigator_a3_bridge is not None:
-        prepare_controller(self.CI, CS, self.sm, self.navigator_a3_bridge)
+        prepare_controller(self.CI, CS, self.sm, self.navigator_a3_bridge, now_nanos, CC)
         applied_cc = control_for_apply(CC, self.navigator_a3_bridge)
       self.last_actuators_output, can_sends = self.CI.apply(applied_cc, now_nanos)
       send_msg = can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid)

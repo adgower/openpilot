@@ -10,7 +10,9 @@ from tools.navigator_a3.safety_audit import lmc
 
 def transport():
   assert importlib.util.find_spec('tools.navigator_a3.command_transport') is not None
-  return importlib.import_module('tools.navigator_a3.command_transport').SimulatedTransport('fixture')
+  result = importlib.import_module('tools.navigator_a3.command_transport').SimulatedTransport('fixture')
+  result.control_input(True, False, True, True)
+  return result
 
 
 def health(t, **changes):
@@ -92,3 +94,11 @@ def test_serialized_synthetic_bridge_cannot_label_publications_live():
   c = NS(navigator_a3=NS(diagnostic={}))
   d = json.loads(diagnostic_json(c, t.bridge))
   assert d['published_frames_provenance'] == 'synthetic'
+
+@pytest.mark.parametrize('inputs', [(True, True, True, True), (True, False, False, True),
+                                  (True, False, True, False), (False, False, True, True)])
+def test_explicit_ineligible_input_prevents_active_simulated_publication(inputs):
+  t = transport()
+  t.health(*health(1))
+  t.control_input(*inputs)
+  assert t.publish(10, select_command('shadow', None, (982, bytes(lmc(angle=1)), 0))) is None

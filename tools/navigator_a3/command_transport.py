@@ -9,7 +9,7 @@ from openpilot.selfdrive.car.navigator_a3_runtime import RuntimeBridge
 
 class SimulatedTransport:
   def __init__(self, route_id, capacity=2048):
-    self.bridge = RuntimeBridge('shadow', [('ford', 2, 0)], route_id, 'synthetic', capacity)
+    self.bridge = RuntimeBridge('shadow', [('ford', 2, 0)], route_id, 'synthetic', capacity, command_role='a3')
     self.bridge.controls_ready = True
 
   @property
@@ -18,14 +18,11 @@ class SimulatedTransport:
 
   @property
   def calculation_fault_reason(self):
-    if self.fault_reason:
-      return self.fault_reason
-    if not self.bridge.configuration_armed:
-      return 'configuration_pending'
-    health = self.bridge.observer.health.get(0)
-    if health is None or not health['controlsAllowed'] or health['safetyRxChecksInvalid']:
-      return 'permission_unavailable'
-    return self.bridge.calculation_fault_reason
+    decision = self.bridge.decision()
+    return decision.calculation_fault_reason or (decision.phase if decision.phase in ('configuration_pending', 'permission_unavailable') else None)
+
+  def control_input(self, active, driver_pressed, source_fresh, measurement_fresh):
+    self.bridge.control_input(active, driver_pressed, source_fresh, measurement_fresh)
 
   def health(self, now_ns, state, valid=True):
     return self.bridge.panda(now_ns, valid, 0, state)
@@ -38,11 +35,8 @@ class SimulatedTransport:
     if address != 982 or len(data) != 8:
       raise ValueError('Simulation expects a complete Ford CAN-FD lateral frame')
     active = bool((data[0] >> 4) & 7)
-    if active and self.calculation_fault_reason:
+    if active and not self.bridge.decision().calculation_eligible:
       return None
-    # Once an experimental session has requested actuation, a driver-pause
-    # neutral frame cannot disarm persistent permission-loss observation.
-    self.bridge.active_request |= active
     return self.bridge.packet('published', now_ns, True, address, data, bus)
 
   def feedback(self, kind, now_ns, frame, *, provenance='synthetic', valid=True):

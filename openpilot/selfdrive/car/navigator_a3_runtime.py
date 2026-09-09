@@ -1,3 +1,5 @@
+from dataclasses import asdict
+from openpilot.selfdrive.car.navigator_a3_lifecycle import Lifecycle
 """Bounded transport evidence for the inhibited core path-angle experiment.
 
 No safety oracle or missing-echo acceptance inference. Runtime data uses a unique
@@ -106,11 +108,14 @@ class RuntimeObserver:
 
 
 class RuntimeBridge:
-  def __init__(self, mode, expected_pandas, route_id, provenance, capacity=2048):
+  def __init__(self, mode, expected_pandas, route_id, provenance, capacity=2048, command_role=None):
     if mode not in ('shadow', 'requested'):
       raise ValueError('Runtime bridge requires explicit experiment mode')
+    role = command_role or ('a2' if mode == 'shadow' else 'a3')
+    if mode == 'shadow' and role == 'a3' and provenance != 'synthetic':
+      raise ValueError('A3 monitoring in shadow is only valid for synthetic transport')
     self.mode = mode
-    self.active_request = False
+    self.lifecycle = Lifecycle(role)
     self.controls_ready = False
     self.configuration_armed = False
     self.observer = RuntimeObserver(route_id, provenance, capacity)
@@ -118,8 +123,32 @@ class RuntimeBridge:
     self.pending: deque = deque(maxlen=16)
     self.dropped_diagnostics = 0
     self.order = 0
-    self.fault_reason = 'physical_enforcement_unvalidated' if mode == 'requested' else None
-    self.calculation_fault_reason = self.fault_reason
+    if mode == 'requested':
+      self.lifecycle.observe_fault('physical_enforcement_unvalidated')
+
+  @property
+  def fault_reason(self):
+    return self.lifecycle.fault_reason
+
+  @property
+  def calculation_fault_reason(self):
+    return self.lifecycle.calculation_fault_reason
+
+  @property
+  def active_request(self):
+    return self.lifecycle.active
+
+  @active_request.setter
+  def active_request(self, active):
+    self.control_input(active, self.lifecycle.driver_pressed, self.lifecycle.source_fresh, self.lifecycle.measurement_fresh)
+
+  def control_input(self, active, driver_pressed, source_fresh, measurement_fresh):
+    self.lifecycle.control_input(active, driver_pressed, source_fresh, measurement_fresh)
+
+  def decision(self):
+    permission = all((h := self.observer.health.get(i)) is not None and h['controlsAllowed'] and not h['safetyRxChecksInvalid']
+                     for i in range(len(self.expected_pandas)))
+    return self.lifecycle.evaluate(self.configuration_armed, permission)
 
   @property
   def disengagement_requested(self):
@@ -144,12 +173,9 @@ class RuntimeBridge:
                                         for h, expected in zip(matching, self.expected_pandas, strict=True))
       if mismatch and self.configuration_armed:
         reason = 'configuration_mismatch'
-      elif self.configuration_armed and self.active_request and (not event['controlsAllowed'] or event['safetyRxChecksInvalid']):
+      elif self.configuration_armed and self.lifecycle.session_requested and (not event['controlsAllowed'] or event['safetyRxChecksInvalid']):
         reason = 'permission_unavailable'
-    if reason and self.fault_reason is None:
-      self.fault_reason = reason
-    if reason and self.calculation_fault_reason is None and not (self.mode == 'shadow' and reason == 'direct_steering_rejection'):
-      self.calculation_fault_reason = reason
+    self.lifecycle.observe_fault(reason)
     # Keep bounded pending evidence; the original can/sendcan/pandaStates remain
     # logged by normal services. Never turn diagnostic overflow into attribution.
     if event['kind'] == 'health' or event.get('address') == TARGET or event['kind'] == 'rejected':
@@ -174,6 +200,7 @@ class RuntimeBridge:
     result = {'schema_version': 2, 'stream_id': self.observer.route_id, 'provenance': self.observer.provenance,
               'fault_reason': self.fault_reason, 'calculation_fault_reason': self.calculation_fault_reason,
               'calculation_eligible': self.configuration_armed and self.calculation_fault_reason is None, 'inhibited': self.disengagement_requested,
+              'lifecycle': dict(version=1, session_requested=self.lifecycle.session_requested, **asdict(self.decision())),
               'transport': list(self.pending), 'dropped_diagnostics': self.dropped_diagnostics,
               'coverage_incomplete': self.observer.coverage_incomplete, 'configuration_armed': self.configuration_armed}
     self.pending.clear()
@@ -214,7 +241,7 @@ def add_inhibition_event(car_output, add_event, steering_unavailable):
     add_event(steering_unavailable)
 
 
-def prepare_controller(ci, cs, sm, bridge):
+def prepare_controller(ci, cs, sm, bridge, now_ns=None, control=None):
   # Parser timestamps advance only for successfully parsed message samples.
   parser = ci.can_parsers.get('pt')
   timestamps = []
@@ -222,12 +249,22 @@ def prepare_controller(ci, cs, sm, bridge):
     timestamps = [parser.ts_nanos.get(msg, {}).get(signal, 0) for msg, signal in
                   (('Yaw_Data_FD1', 'VehYaw_W_Actl'), ('BrakeSysFeatures', 'Veh_V_ActlBrk'))]
   measurement_ns = min(timestamps) if timestamps and all(t > 0 for t in timestamps) else None
+  source_ns = int(sm.logMonoTime['carControl'])
+  now_ns = source_ns if now_ns is None else now_ns
+  source_fresh = bool(sm.all_checks(['carControl'])) and 0 <= now_ns - source_ns <= 100_000_000
+  measurement_fresh = (getattr(cs, 'vEgoRaw', 10.) <= 9. or
+                       (cs.canValid and not cs.vehicleSensorsInvalid and measurement_ns is not None and
+                        0 <= now_ns - measurement_ns <= 100_000_000))
+  bridge.control_input(bool(control.latActive) if control is not None else bridge.active_request,
+                       getattr(cs, 'steeringPressed', False), source_fresh, measurement_fresh)
+  decision = bridge.decision()
+  availability_reason = decision.phase if decision.phase in ('configuration_pending', 'permission_unavailable') else None
   ci.CC.set_navigator_a3_evidence(source_ns=int(sm.logMonoTime['carControl']),
                                 source_valid=bool(sm.all_checks(['carControl'])),
                                 measurement_ns=measurement_ns,
                                 measurement_valid=bool(cs.canValid and not cs.vehicleSensorsInvalid and measurement_ns is not None),
                                 fault_reason=bridge.fault_reason,
-                                calculation_fault_reason=bridge.calculation_fault_reason or (None if bridge.configuration_armed else 'configuration_pending'))
+                                calculation_fault_reason=decision.calculation_fault_reason or availability_reason)
 
 
 def control_for_apply(cc, bridge):

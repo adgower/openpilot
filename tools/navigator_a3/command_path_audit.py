@@ -15,7 +15,6 @@ import pytest
 from opendbc.car.ford.navigator_a3 import PROFILES
 from opendbc.car.ford.tests.test_navigator_a3_runtime import sample
 from openpilot.selfdrive.car.tests.test_navigator_a3_card import harness, frames
-from openpilot.selfdrive.car.navigator_a3_runtime import RuntimeBridge
 from tools.navigator_a3.command_transport import SimulatedTransport
 from tools.navigator_a3.safety_audit import inputs, event, lmc
 from tools.navigator_a3.aggregate_timing_contract import compiled, execute
@@ -31,15 +30,16 @@ def run_case(name, profile, sign):
     from opendbc.car.ford.carcontroller import CarController
     from opendbc.car import Bus
     instance.CI.CC = CarController({Bus.pt:'ford_lincoln_base_pt'},instance.CP)
-    instance.navigator_a3_bridge = RuntimeBridge('shadow',[('ford',2,0)],'card-fixture','synthetic')
-    instance.navigator_a3_bridge.controls_ready = True
     baseline, _, _ = harness(mp, 'a2')
     baseline.CI.CC = CarController({Bus.pt:'ford_lincoln_base_pt'},baseline.CP)
     t = SimulatedTransport(name)
+    instance.navigator_a3_bridge = t.bridge
+    # Test-only transport boundary: only virtual A3 packets enter this observer.
+    # Actual A2 sendcan is still serialized and compared below.
+    mp.setattr('openpilot.selfdrive.car.card.observe_publication', lambda *args, **kwargs: None)
     h = NS(safetyTxBlocked=0, controlsAllowed=True, safetyRxChecksInvalid=False,
            safetyModel='ford', safetyParam=2, alternativeExperience=0)
     t.health(1_000_000_001,h)
-    instance.navigator_a3_bridge.panda(1_000_000_001,True,0,h)
     _, cs = sample(25)
     cs.out.canValid = True
     cs.out.vEgoRaw = cs.out.vEgo = 25.
@@ -69,9 +69,6 @@ def run_case(name, profile, sign):
           t.feedback('returned',now,last_frame)
       cs.out.steeringPressed=name=='driver' and 17<=step<=21
       mp.setattr('openpilot.selfdrive.car.card.time.monotonic',lambda now=now:now/1e9)
-      # Explicit synthetic evidence input. This does not clear or change any
-      # production fault; this whole card instance is an in-memory fixture.
-      instance.navigator_a3_bridge.calculation_fault_reason=t.calculation_fault_reason
       for c in (instance,baseline):
         c.sm.logMonoTime['carControl']=now
         for values in c.CI.can_parsers['pt'].ts_nanos.values():
@@ -79,11 +76,12 @@ def run_case(name, profile, sign):
             values[key]=now-100_000_001 if name=='measurement' and 17<=step<=21 else now
         c.controls_update(cs.out,command.as_reader())
         c.state_publish(cs.out,None)
-      d=json.loads(instance.pm.read('carOutput').carOutput.navigatorA3.diagnosticsJson)['controller']
+      envelope=json.loads(instance.pm.read('carOutput').carOutput.navigatorA3.diagnosticsJson)
+      d=envelope['controller']
       selection=instance.CI.CC.navigator_a3.selection
       pub=t.publish(now,selection)
       serialized=d['command_selection']['experimental_frame']
-      calls.append({'step':step,'now_ns':now,'diagnostic':d,'publication':pub,'fault':t.fault_reason,
+      calls.append({'step':step,'now_ns':now,'diagnostic':d,'lifecycle':envelope['lifecycle'],'publication':pub,'fault':t.fault_reason,
                     'actual_can_equal_a2':frames(instance)==frames(baseline),
                     'serialized_selection_matches':serialized==d['proposed_frame']})
       if pub:
@@ -119,7 +117,7 @@ def audit(repo,output):
   parent=Path(__file__).resolve().parents[2]
   paths=[Path(__file__),Path(__file__).with_name('command_transport.py'),
     parent/'openpilot/selfdrive/car/tests/test_navigator_a3_card.py',
-    parent/'openpilot/selfdrive/car/card.py',parent/'openpilot/selfdrive/car/navigator_a3_runtime.py']
+    parent/'openpilot/selfdrive/car/navigator_a3_lifecycle.py',parent/'openpilot/selfdrive/car/card.py',parent/'openpilot/selfdrive/car/navigator_a3_runtime.py']
   paths += [repo/'opendbc/car/ford'/name for name in ('carcontroller.py','navigator_a3_command.py',
     'navigator_a3_runtime.py','navigator_a3_scheduler.py','navigator_a3.py','fordcan.py')]
   result['host_source_sha256']={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}

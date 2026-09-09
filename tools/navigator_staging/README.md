@@ -4,7 +4,7 @@ This is source/build preparation, not completed target-device validation. A2 per
 
 ## Fixed configuration
 
-Parent baseline18fd1a6505e072710514e723dae2edc65c0e3355; child01bea343a7f7d4e4f8a1947539abacb59ab8c278. The package manifest records the resulting parent commit and every submodule. Preserve Chestnut ONNX models, dual-resolution driver-monitor warp fix, fixed Expedition fingerprint, Navigator3.1115m wheelbase, and baseline mass. Do not transplant donor3.69m wheelbase, WMI V12, learned parameters, or a BluePilot firmware image.
+The generated package.json records the exact selected parent and every child commit. Its configuration pins are derived from that tree, never from an earlier staging build. Preserve Chestnut ONNX models, dual-resolution driver-monitor warp fix, fixed Expedition fingerprint, Navigator3.1115m wheelbase, and baseline mass. Do not transplant donor3.69m wheelbase, WMI V12, learned parameters, or a BluePilot firmware image.
 
 `launch_openpilot.sh` uses the guarded staging entry only when `.staging-package.json` exists. Normal source checkouts retain their original entry. The staging guard requires AGNOS19.7, matching source/model hashes and complete local target outputs, then selects `shadow` and `expedition-provisional-v1`. This profile is provisional, not vehicle-validated. A2 startup for matched rollback is `tools/navigator_staging/launch_staging.sh a2`; neither entry selects boot or reboots. After exact artifact verification, the guarded entry creates the standard `prebuilt` marker so the normal launcher cannot rebuild after review. It refuses `.overlay_init` state rather than allow an overlay to replace the reviewed checkout.
 
@@ -38,7 +38,7 @@ Startup may install matching Panda firmware through pandad and may perform Chest
 
 ## Matched rollback requirements
 
-Before any OS/install/start change, preserve a fresh verified backup of CURRENT BluePilot source including dirty/untracked files, parameters/learned state, models, boot service/entry path, OS/version and observed firmware identity. The older A2 backup is a separate restore point, not a current BluePilot rollback. Archive source/configuration hashes and local firmware artifacts; mark flashed firmware identity unknown if it cannot be established read-only.
+Before any OS/install/start change, preserve a fresh verified backup of CURRENT installation source including dirty/untracked files, parameters/learned state, models, boot service/entry path, OS/version and observed firmware identity. The older A2 backup is a separate restore point, not necessarily the current installation rollback. Archive source/configuration hashes and local firmware artifacts; mark flashed firmware identity unknown if it cannot be established read-only.
 
 - Returning to BluePilot: restore its matched18.5 OS/source/config/models and separately reviewed firmware requirements. Switching only a Git branch from19.7 is not a verified rollback.
 - Returning to staged A2: use this same19.7 source/schema/model/firmware set with startup modea2, restoring its saved configuration as needed. Never indiscriminately overlay old parameters onto another fork.
