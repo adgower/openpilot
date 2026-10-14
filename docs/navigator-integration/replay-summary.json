@@ -1,0 +1,13 @@
+{
+  "old_new_trial_CAN_identical_all_three_drives": true,
+  "segments": 45,
+  "controller_updates": 252406,
+  "rx": 10082330,
+  "accepted_tx": 148765,
+  "rejected_tx": 0,
+  "high_speed_messages": 12425,
+  "high_speed_differences": 0,
+  "note": "Actual LOW_SPEED_GAIN flag selects trial at controller construction; final native safety library. Recorded-input replay, not closed-loop/forwarding/hardware proof.",
+  "default_off_CAN_identical_to_preserved_original_all_three_drives": true,
+  "default_off_rejections_match_prior_baseline": true
+}

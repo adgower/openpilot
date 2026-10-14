@@ -1,0 +1,81 @@
+[
+  {
+    "drive": "earlier",
+    "mode": "default-off",
+    "segments": 33,
+    "duration_s": 1942.497,
+    "counts": {
+      "saved_tx_frames": 113990,
+      "controller_updates": 191846,
+      "generated_frames": 113870,
+      "tx_before_ford_config": 369,
+      "ford_initializations": 1,
+      "invalid_safety_ticks": 1,
+      "tx_accepted": 113500,
+      "rx_frames": 7693803,
+      "active_angle_frames": 7057,
+      "tx_rejected": 1,
+      "reject_0x3d6": 1
+    },
+    "rx_invalid": {},
+    "reported_blocked_counter_max": 15,
+    "tx_sha256": "4dbcc48949c7fbc45b6c04c8bb36ba50bd858aeb99c169d7884e83442bd4812a",
+    "saved_tx_sha256": "016b63b6df33e2798b6a7e5e78dfcfe8b370a5b70b3e08777c3542c538e466f2",
+    "first_rejected_frames": [
+      {
+        "time_s": 1373.83007,
+        "addr": "0x3d6",
+        "mode": 1,
+        "controls_allowed": true,
+        "speed_mph": 23.432,
+        "pressed": false,
+        "lat_active": true,
+        "rx_valid": true
+      }
+    ]
+  },
+  {
+    "drive": "latest-1",
+    "mode": "default-off",
+    "segments": 5,
+    "duration_s": 260.085,
+    "counts": {
+      "saved_tx_frames": 14829,
+      "controller_updates": 24751,
+      "generated_frames": 14708,
+      "tx_before_ford_config": 371,
+      "ford_initializations": 1,
+      "invalid_safety_ticks": 1,
+      "tx_accepted": 14337,
+      "rx_frames": 971525,
+      "active_angle_frames": 2917
+    },
+    "rx_invalid": {},
+    "reported_blocked_counter_max": 7,
+    "tx_sha256": "3c411a64296af4c14564f886ea6232c7b4548ab7a96d277596567ec6aff03344",
+    "saved_tx_sha256": "3509797428e1aacff2d3190a43a3279bf022e27b6f36a6fec2d503c6819466ec",
+    "first_rejected_frames": []
+  },
+  {
+    "drive": "latest-2",
+    "mode": "default-off",
+    "segments": 7,
+    "duration_s": 362.751,
+    "counts": {
+      "controller_updates": 35809,
+      "generated_frames": 21296,
+      "tx_before_ford_config": 369,
+      "saved_tx_frames": 20937,
+      "ford_initializations": 1,
+      "invalid_safety_ticks": 1,
+      "rx_frames": 1417002,
+      "tx_accepted": 20927,
+      "active_angle_frames": 4501
+    },
+    "rx_invalid": {},
+    "reported_blocked_counter_max": 10,
+    "tx_sha256": "f0feefe5d0438bd34708e5da46af42f9d14cdfe14a6c25744676e0426a94b20c",
+    "saved_tx_sha256": "19c51062fce2f49deb13522a80b3a5b5773866338028e123ef813dcaba75bd25",
+    "first_rejected_frames": []
+  }
+]

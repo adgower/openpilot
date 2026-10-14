@@ -1,0 +1,11 @@
+{
+  "parent_code_commit": "21fd666e252c34e063d469cf5980899469452ed6",
+  "child_commit": "c09baff5c2cdd7c887e25c2d88b671f403e1ed9d",
+  "parent_base": "6eb63e045469a582f4c7b406705543e891113606",
+  "child_base": "b3bd79a659dae961af169a3baac723961f720133",
+  "branch": "codex/navigator-master-integration",
+  "panda_h7_sha256": "5a10a6119110b3c41a03d381c4bdd3bea4e05c3a7164bef515b42df7054c466e",
+  "independent_review": "No important actionable findings; source review of parent21fd666e2 and childc09baff5",
+  "device_access_this_task": false,
+  "published": false
+}

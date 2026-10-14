@@ -21,9 +21,21 @@ AGNOS 19.9, current model/Chestnut requirements and automatic Ford checksum gene
 
 The full child suite passes: **3746 tests**, **1690 skips**, **24673 passing subtests**, including normal MISRA mutation checks. The build uses an unsanitized native debug safety library on macOS; no sanitizer result is claimed. Targeted parent UI/Params tests and all four real Params-to-Ford startup option combinations pass. Matching H7 firmware and native Params/messaging targets build locally.
 
-The full minimal Mac build stops at Metal command-queue allocation during model warp compilation. Full parent pytest collection also stops on missing generated native solver/localizer artifacts and optional dependencies. Those failures are recorded in the logs; this is not a completed full openpilot build or full parent-suite pass, and it is not device/road validation.
+The full minimal Mac build first stopped at Metal command-queue allocation under the sandbox. A retry with normal GPU access progressed to missing LLVM shared-library support during model warp compilation. Full parent pytest collection also stops on missing generated native solver/localizer artifacts and optional dependencies. Those failures are recorded in the logs; this is not a completed full openpilot build or full parent-suite pass, and it is not device/road validation.
 
-The original migration design also requires full recorded-input safety replay, old/new trial command comparison, and independent review. Their final results and paired SHAs are recorded in the project handoff report; do not infer completion from this intermediate README alone. Publication, installation, AGNOS migration and road evaluation remain separate steps.
+Final 45-segment replay uses the real trial selector and compiled final safety hooks: **252406 controller updates, 10082330 received CAN frames, 148765 accepted TX and zero rejected TX**. Complete generated CAN streams are byte-identical to the previous trial on all three saved drives. The 12425 messages at or above 45 mph match the regular pinion baseline. With both options off, all three complete CAN stream hashes also match the preserved original baseline; its existing one-angle rejection remains unchanged. Each drive has one initial RX warmup invalid tick, and pre-configuration TX is excluded.
+
+The latest drive's recorded relevant RX/all-TX replay has the same two angle and eight button rejections as before; it does not equate those counts to hardware blocked counters or simulate changed vehicle response. A fresh-context source review found no important actionable issues in the paired implementation. These checks do not reproduce full forwarding/hardware behavior or provide sanitizer coverage.
+
+Publication, installation, AGNOS migration, a complete supported build and road evaluation remain separate steps. See `replay-summary.json`, the mode-specific JSON files and `provenance.json` for exact evidence.
+
+## Reproducing the focused checks
+
+Use a Python 3.12 environment with this project's build/test dependencies and initialize the pinned submodules. Put the paired child first on PYTHONPATH. The captured `verification-environment.txt` records the local verification packages; it is not a replacement for the project's supported lock/setup workflow.
+
+On macOS the replay debug library can be built with `cc -shared -fPIC -DALLOW_DEBUG -Wall -Wextra -Werror -Wno-pointer-to-int-cast -std=gnu11 -O0 -g -I opendbc_repo opendbc_repo/opendbc/safety/tests/libsafety/safety.c -o docs/navigator-integration/safety-debug-macos.so`. This deliberately omits sanitizer instrumentation, whose loading was not supported in the earlier Mac test environment. It is not the Panda firmware binary.
+
+Set `NAVIGATOR_RECORDINGS` to the private complete 45-segment dataset directory, then run `python docs/navigator-integration/full_replay.py low-speed-prototype` and `python docs/navigator-integration/full_replay.py default-off`. The harness requires the documented anonymous route/segment layout and writes JSON beside itself; recordings are not bundled or committed. For the H7 target run SCons in `panda` with `PYTHONPATH` pointing to this paired opendbc checkout and the ARM toolchain on PATH. Do not flash the built artifact as part of local verification.
 
 ## Settings and source provenance
 

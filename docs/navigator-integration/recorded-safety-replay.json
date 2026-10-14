@@ -1,0 +1,125 @@
+{
+  "counts": {
+    "tx_before_ford": 515,
+    "initializations": 1,
+    "invalid_ticks": 1,
+    "tx_frames": 35056,
+    "rx_frames": 296638,
+    "rx_invalid": 0,
+    "reject_0x3d6": 2,
+    "reject_0x83": 8
+  },
+  "rejections": [
+    {
+      "t_s": 73.271134,
+      "addr": "0x3d6",
+      "bus": 0,
+      "mph": 23.165,
+      "pressed": true,
+      "wheel_deg": 45.4,
+      "mode": 1,
+      "controls_allowed": false,
+      "rx_valid": true
+    },
+    {
+      "t_s": 73.29216,
+      "addr": "0x83",
+      "bus": 2,
+      "mph": 23.171,
+      "pressed": true,
+      "wheel_deg": 47.1,
+      "mode": null,
+      "controls_allowed": false,
+      "rx_valid": true
+    },
+    {
+      "t_s": 73.29216,
+      "addr": "0x83",
+      "bus": 0,
+      "mph": 23.171,
+      "pressed": true,
+      "wheel_deg": 47.1,
+      "mode": null,
+      "controls_allowed": false,
+      "rx_valid": true
+    },
+    {
+      "t_s": 242.503851,
+      "addr": "0x83",
+      "bus": 2,
+      "mph": 32.417,
+      "pressed": false,
+      "wheel_deg": -2.0,
+      "mode": null,
+      "controls_allowed": false,
+      "rx_valid": true
+    },
+    {
+      "t_s": 242.503851,
+      "addr": "0x83",
+      "bus": 0,
+      "mph": 32.417,
+      "pressed": false,
+      "wheel_deg": -2.0,
+      "mode": null,
+      "controls_allowed": false,
+      "rx_valid": true
+    },
+    {
+      "t_s": 248.460686,
+      "addr": "0x83",
+      "bus": 2,
+      "mph": 30.317,
+      "pressed": false,
+      "wheel_deg": -1.6,
+      "mode": null,
+      "controls_allowed": false,
+      "rx_valid": true
+    },
+    {
+      "t_s": 248.460686,
+      "addr": "0x83",
+      "bus": 0,
+      "mph": 30.317,
+      "pressed": false,
+      "wheel_deg": -1.6,
+      "mode": null,
+      "controls_allowed": false,
+      "rx_valid": true
+    },
+    {
+      "t_s": 309.504343,
+      "addr": "0x3d6",
+      "bus": 0,
+      "mph": 28.204,
+      "pressed": false,
+      "wheel_deg": -1.6,
+      "mode": 1,
+      "controls_allowed": false,
+      "rx_valid": true
+    },
+    {
+      "t_s": 563.032311,
+      "addr": "0x83",
+      "bus": 2,
+      "mph": 15.932,
+      "pressed": true,
+      "wheel_deg": -30.2,
+      "mode": null,
+      "controls_allowed": false,
+      "rx_valid": true
+    },
+    {
+      "t_s": 563.032311,
+      "addr": "0x83",
+      "bus": 0,
+      "mph": 15.932,
+      "pressed": true,
+      "wheel_deg": -30.2,
+      "mode": null,
+      "controls_allowed": false,
+      "rx_valid": true
+    }
+  ],
+  "limits": "Relevant RX addresses only plus all recorded TX. No forwarding/hardware reproduction. Counter increments are cumulative health indicators, not per-message attribution."
+}

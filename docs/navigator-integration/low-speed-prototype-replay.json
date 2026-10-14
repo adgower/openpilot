@@ -1,0 +1,83 @@
+[
+  {
+    "drive": "earlier",
+    "mode": "low-speed-prototype",
+    "segments": 33,
+    "duration_s": 1942.497,
+    "counts": {
+      "saved_tx_frames": 113990,
+      "controller_updates": 191846,
+      "generated_frames": 113870,
+      "tx_before_ford_config": 369,
+      "ford_initializations": 1,
+      "invalid_safety_ticks": 1,
+      "tx_accepted": 113501,
+      "rx_frames": 7693803,
+      "active_angle_frames": 7057
+    },
+    "rx_invalid": {},
+    "reported_blocked_counter_max": 15,
+    "tx_sha256": "16c0a7fcc506a363a6553908abc354625da5b0361074ea681c1d985bd881ad87",
+    "saved_tx_sha256": "016b63b6df33e2798b6a7e5e78dfcfe8b370a5b70b3e08777c3542c538e466f2",
+    "first_rejected_frames": [],
+    "comparison": {
+      "high_speed_generated_messages": 12425,
+      "high_speed_updates_different": 0,
+      "updates_different": 2543
+    }
+  },
+  {
+    "drive": "latest-1",
+    "mode": "low-speed-prototype",
+    "segments": 5,
+    "duration_s": 260.085,
+    "counts": {
+      "saved_tx_frames": 14829,
+      "controller_updates": 24751,
+      "generated_frames": 14708,
+      "tx_before_ford_config": 371,
+      "ford_initializations": 1,
+      "invalid_safety_ticks": 1,
+      "tx_accepted": 14337,
+      "rx_frames": 971525,
+      "active_angle_frames": 2917
+    },
+    "rx_invalid": {},
+    "reported_blocked_counter_max": 7,
+    "tx_sha256": "b7ee7ba6a5d3aef54822dc2badd5ec65818b72775723d53992dd7834b08e9529",
+    "saved_tx_sha256": "3509797428e1aacff2d3190a43a3279bf022e27b6f36a6fec2d503c6819466ec",
+    "first_rejected_frames": [],
+    "comparison": {
+      "high_speed_generated_messages": 0,
+      "high_speed_updates_different": 0,
+      "updates_different": 2088
+    }
+  },
+  {
+    "drive": "latest-2",
+    "mode": "low-speed-prototype",
+    "segments": 7,
+    "duration_s": 362.751,
+    "counts": {
+      "controller_updates": 35809,
+      "generated_frames": 21296,
+      "tx_before_ford_config": 369,
+      "saved_tx_frames": 20937,
+      "ford_initializations": 1,
+      "invalid_safety_ticks": 1,
+      "rx_frames": 1417002,
+      "tx_accepted": 20927,
+      "active_angle_frames": 4501
+    },
+    "rx_invalid": {},
+    "reported_blocked_counter_max": 10,
+    "tx_sha256": "22579707ef375af951c60ccf9523a6de09adcf00661bde4019e967cdd6b8c05a",
+    "saved_tx_sha256": "19c51062fce2f49deb13522a80b3a5b5773866338028e123ef813dcaba75bd25",
+    "first_rejected_frames": [],
+    "comparison": {
+      "high_speed_generated_messages": 0,
+      "high_speed_updates_different": 0,
+      "updates_different": 2496
+    }
+  }
+]
