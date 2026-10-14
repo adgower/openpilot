@@ -20,3 +20,6 @@ if [ -z "$AGNOS_VERSION" ]; then
 fi
 
 export STAGING_ROOT="/data/safe_staging"
+
+# Explicit vehicle selection for this Navigator fork.
+export FINGERPRINT="FORD_EXPEDITION_MK4"

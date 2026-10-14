@@ -1,3 +1,5 @@
+**Navigator integration fork:** [features, settings, validation and installation limits](docs/navigator-integration/README.md).
+
 <div align="center" style="text-align: center;">
 
 <h1>openpilot</h1>

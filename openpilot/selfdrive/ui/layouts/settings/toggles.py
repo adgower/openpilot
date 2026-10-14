@@ -45,6 +45,21 @@ class TogglesLayout(Widget):
         "chffr_wheel.png",
         True,
       ),
+      "FordPrefSteerAngleCurvature": (
+        lambda: tr("Use Pinion Yaw Sensor"),
+        tr_noop("Estimate turning from steering-pinion angle instead of vehicle yaw-rate feedback. " +
+                "For this Expedition/Navigator configuration only. Change while the vehicle is off; applies at the next start."),
+        "chffr_wheel.png",
+        True,
+      ),
+      "FordPrefLowSpeedGain": (
+        lambda: tr("Navigator Low-speed Steering Trial"),
+        tr_noop("Use the experimental low-speed gain calibration with pinion feedback. " +
+                "Keeps the 1.20/0.97 settings and fades added calibration out by 45 mph. " +
+                "Requires Use Pinion Yaw Sensor. Change while the vehicle is off; applies at the next start."),
+        "chffr_wheel.png",
+        True,
+      ),
       "ExperimentalMode": (
         lambda: tr("Experimental Mode"),
         "",
@@ -114,11 +129,11 @@ class TogglesLayout(Widget):
         locked = self._params.get_bool(param + "Lock")
       except UnknownKeyName:
         locked = False
-      toggle.action_item.set_enabled(not locked)
+      toggle.action_item.set_enabled(not locked and (param not in ("FordPrefSteerAngleCurvature", "FordPrefLowSpeedGain") or self._pinion_option_supported()))
 
       # Make description callable for live translation
       additional_desc = ""
-      if needs_restart and not locked:
+      if needs_restart and not locked and param not in ("FordPrefSteerAngleCurvature", "FordPrefLowSpeedGain"):
         additional_desc = tr("Changing this setting will restart openpilot if the car is powered on.")
       toggle.set_description(lambda og_desc=toggle.description, add_desc=additional_desc: tr(og_desc) + (" " + tr(add_desc) if add_desc else ""))
 
@@ -194,7 +209,8 @@ class TogglesLayout(Widget):
     # these toggles need restart, block while engaged
     for toggle_def in self._toggle_defs:
       if self._toggle_defs[toggle_def][3] and toggle_def not in self._locked_toggles:
-        self._toggles[toggle_def].action_item.set_enabled(not ui_state.engaged)
+        allowed = self._pinion_option_supported() if toggle_def in ("FordPrefSteerAngleCurvature", "FordPrefLowSpeedGain") else not ui_state.engaged
+        self._toggles[toggle_def].action_item.set_enabled(allowed)
 
   def _render(self, rect):
     self._scroller.render(rect)
@@ -203,7 +219,15 @@ class TogglesLayout(Widget):
     icon = "experimental.png" if self._toggles["ExperimentalMode"].action_item.get_state() else "experimental_white.png"
     self._toggles["ExperimentalMode"].set_icon(icon)
 
+  @staticmethod
+  def _pinion_option_supported() -> bool:
+    cp = ui_state.CP
+    return (not ui_state.started and cp is not None and cp.brand == "ford" and
+            cp.carFingerprint == "FORD_EXPEDITION_MK4" and bool(cp.flags & 1))
+
   def _toggle_callback(self, state: bool, param: str):
+    if param in ("FordPrefSteerAngleCurvature", "FordPrefLowSpeedGain") and not self._pinion_option_supported():
+      return
     self._params.put_bool(param, state, block=True)
     if param == "ExperimentalMode":
       self._update_experimental_mode_icon()

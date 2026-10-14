@@ -32,6 +32,8 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"DisableLogging", {CLEAR_ON_MANAGER_START | CLEAR_ON_ONROAD_TRANSITION, BOOL}},
     {"DisablePowerDown", {PERSISTENT, BOOL}},
     {"DisableUpdates", {PERSISTENT, BOOL}},
+    {"FordPrefSteerAngleCurvature", {PERSISTENT, BOOL, "0"}},
+    {"FordPrefLowSpeedGain", {PERSISTENT, BOOL, "0"}},
     {"DisengageOnAccelerator", {PERSISTENT, BOOL, "0"}},
     {"DongleId", {PERSISTENT, STRING}},
     {"DoReboot", {CLEAR_ON_MANAGER_START, BOOL}},

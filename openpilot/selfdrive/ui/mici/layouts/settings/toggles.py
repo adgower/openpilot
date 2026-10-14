@@ -1,7 +1,7 @@
 from openpilot.cereal import log
 
 from openpilot.system.ui.widgets.scroller import NavScroller
-from openpilot.selfdrive.ui.mici.widgets.button import BigParamControl, BigMultiParamToggle
+from openpilot.selfdrive.ui.mici.widgets.button import BigParamControl, BigMultiParamToggle, BigToggle
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.selfdrive.ui.layouts.settings.common import restart_needed_callback
 from openpilot.selfdrive.ui.ui_state import ui_state
@@ -25,6 +25,15 @@ class TogglesLayoutMici(NavScroller):
                                                    "Set speed is a maximum, not a target.\n" +
                                                    "These are alpha features. Expect mistakes.\n" +
                                                    "The path colors show acceleration and braking.")
+    self._navigator_toggles = {}
+    for key, title, subtitle in (
+      ("FordPrefSteerAngleCurvature", "use pinion\nyaw sensor", "offroad only"),
+      ("FordPrefLowSpeedGain", "navigator\nlow-speed trial", "requires pinion"),
+    ):
+      item = BigToggle(title, subtitle, initial_state=ui_state.params.get_bool(key),
+                       toggle_callback=lambda state, param=key: self._on_navigator_toggle(state, param))
+      item.set_enabled(self._navigator_supported)
+      self._navigator_toggles[key] = item
     is_metric_toggle = BigParamControl("use metric units", "IsMetric")
     ldw_toggle = BigParamControl("lane departure warnings", "IsLdwEnabled",
                                  description="Warn when you drift across a detected lane line.\n" +
@@ -44,6 +53,7 @@ class TogglesLayoutMici(NavScroller):
     self._scroller.add_widgets([
       self._personality_toggle,
       self._experimental_btn,
+      *self._navigator_toggles.values(),
       is_metric_toggle,
       ldw_toggle,
       always_on_dm_toggle,
@@ -55,6 +65,7 @@ class TogglesLayoutMici(NavScroller):
     # Toggle lists
     self._refresh_toggles = (
       ("ExperimentalMode", self._experimental_btn),
+      *self._navigator_toggles.items(),
       ("IsMetric", is_metric_toggle),
       ("IsLdwEnabled", ldw_toggle),
       ("AlwaysOnDM", always_on_dm_toggle),
@@ -104,3 +115,16 @@ class TogglesLayoutMici(NavScroller):
     # Refresh toggles from params to mirror external changes
     for key, item in self._refresh_toggles:
       item.set_checked(ui_state.params.get_bool(key))
+
+  @staticmethod
+  def _navigator_supported() -> bool:
+    cp = ui_state.CP
+    return (not ui_state.started and cp is not None and cp.brand == "ford" and
+            cp.carFingerprint == "FORD_EXPEDITION_MK4" and bool(cp.flags & 1))
+
+  def _on_navigator_toggle(self, state: bool, key: str):
+    if not self._navigator_supported():
+      self._navigator_toggles[key].set_checked(ui_state.params.get_bool(key))
+      return
+    ui_state.params.put_bool(key, state, block=True)
+    ui_state.params.put_bool("OnroadCycleRequested", True, block=True)

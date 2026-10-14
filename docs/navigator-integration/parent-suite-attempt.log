@@ -1,0 +1,76 @@
+
+==================================== ERRORS ====================================
+_____ ERROR collecting openpilot/selfdrive/car/tests/test_cruise_speed.py ______
+ImportError while importing test module '/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/openpilot/selfdrive/car/tests/test_cruise_speed.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+../../../.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+openpilot/selfdrive/car/tests/test_cruise_speed.py:10: in <module>
+    from openpilot.selfdrive.test.longitudinal_maneuvers.maneuver import Maneuver
+openpilot/selfdrive/test/longitudinal_maneuvers/maneuver.py:2: in <module>
+    from openpilot.selfdrive.test.longitudinal_maneuvers.plant import Plant
+openpilot/selfdrive/test/longitudinal_maneuvers/plant.py:10: in <module>
+    from openpilot.selfdrive.controls.lib.longitudinal_planner import LongitudinalPlanner
+openpilot/selfdrive/controls/lib/longitudinal_planner.py:13: in <module>
+    from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import LongitudinalMpc, LongitudinalPlanSource
+openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/long_mpc.py:16: in <module>
+    from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.c_generated_code.acados_ocp_solver_pyx import AcadosOcpSolverCython
+E   ModuleNotFoundError: No module named 'openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.c_generated_code.acados_ocp_solver_pyx'
+_ ERROR collecting openpilot/selfdrive/controls/tests/test_following_distance.py _
+ImportError while importing test module '/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/openpilot/selfdrive/controls/tests/test_following_distance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+../../../.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+openpilot/selfdrive/controls/tests/test_following_distance.py:7: in <module>
+    from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import get_safe_obstacle_distance, get_stopped_equivalence_factor, get_T_FOLLOW
+openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/long_mpc.py:16: in <module>
+    from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.c_generated_code.acados_ocp_solver_pyx import AcadosOcpSolverCython
+E   ModuleNotFoundError: No module named 'openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.c_generated_code.acados_ocp_solver_pyx'
+_____ ERROR collecting openpilot/selfdrive/locationd/test/test_paramsd.py ______
+ImportError while importing test module '/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/openpilot/selfdrive/locationd/test/test_paramsd.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+../../../.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+openpilot/selfdrive/locationd/test/test_paramsd.py:6: in <module>
+    from openpilot.selfdrive.locationd.paramsd import retrieve_initial_vehicle_params
+openpilot/selfdrive/locationd/paramsd.py:11: in <module>
+    from openpilot.selfdrive.locationd.models.car_kf import CarKalman, ObservationKind, States
+openpilot/selfdrive/locationd/models/car_kf.py:18: in <module>
+    from rednose.helpers.ekf_sym_pyx import EKF_sym_pyx
+E   ModuleNotFoundError: No module named 'rednose.helpers.ekf_sym_pyx'
+_ ERROR collecting openpilot/selfdrive/test/longitudinal_maneuvers/test_longitudinal.py _
+ImportError while importing test module '/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/openpilot/selfdrive/test/longitudinal_maneuvers/test_longitudinal.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+../../../.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+openpilot/selfdrive/test/longitudinal_maneuvers/test_longitudinal.py:5: in <module>
+    from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import STOP_DISTANCE
+openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/long_mpc.py:16: in <module>
+    from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.c_generated_code.acados_ocp_solver_pyx import AcadosOcpSolverCython
+E   ModuleNotFoundError: No module named 'openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.c_generated_code.acados_ocp_solver_pyx'
+__ ERROR collecting openpilot/system/ui/lib/tests/test_handle_state_change.py __
+ImportError while importing test module '/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/openpilot/system/ui/lib/tests/test_handle_state_change.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+../../../.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+openpilot/system/ui/lib/tests/test_handle_state_change.py:7: in <module>
+    from jeepney.low_level import MessageType
+E   ModuleNotFoundError: No module named 'jeepney'
+=========================== short test summary info ============================
+ERROR openpilot/selfdrive/car/tests/test_cruise_speed.py
+ERROR openpilot/selfdrive/controls/tests/test_following_distance.py
+ERROR openpilot/selfdrive/locationd/test/test_paramsd.py
+ERROR openpilot/selfdrive/test/longitudinal_maneuvers/test_longitudinal.py
+ERROR openpilot/system/ui/lib/tests/test_handle_state_change.py
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 5 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+5 errors in 2.79s

@@ -1,0 +1,781 @@
+scons: Reading SConscript files ...
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+scons: done reading SConscript files.
+scons: Building targets ...
+progress: 0.1
+progress: 0.3
+progress: 0.4
+progress: 0.6
+progress: 0.7
+progress: 0.9
+progress: 1.0
+progress: 1.2
+progress: 1.3
+progress: 1.5
+progress: 1.6
+progress: 1.7
+progress: 1.9
+progress: 2.0
+progress: 2.2
+progress: 2.3
+progress: 2.5
+progress: 2.6
+progress: 2.8
+progress: 2.9
+progress: 3.1
+progress: 3.2
+progress: 3.4
+progress: 3.5
+progress: 3.6
+progress: 3.8
+progress: 3.9
+progress: 4.1
+progress: 4.2
+progress: 4.4
+progress: 4.5
+progress: 4.7
+progress: 4.8
+progress: 5.0
+progress: 5.1
+progress: 5.2
+progress: 5.4
+progress: 5.5
+progress: 5.7
+progress: 5.8
+progress: 6.0
+progress: 6.1
+progress: 6.3
+progress: 6.4
+progress: 6.6
+progress: 6.7
+progress: 6.8
+progress: 7.0
+progress: 7.1
+progress: 7.3
+progress: 7.4
+progress: 7.6
+progress: 7.7
+progress: 7.9
+progress: 8.0
+progress: 8.2
+progress: 8.3
+progress: 8.5
+progress: 8.6
+progress: 8.7
+progress: 8.9
+progress: 9.0
+progress: 9.2
+progress: 9.3
+progress: 9.5
+progress: 9.6
+progress: 9.8
+progress: 9.9
+progress: 10.1
+progress: 10.2
+progress: 10.3
+progress: 10.5
+progress: 10.6
+progress: 10.8
+progress: 10.9
+progress: 11.1
+progress: 11.2
+progress: 11.4
+progress: 11.5
+progress: 11.7
+progress: 11.8
+progress: 11.9
+progress: 12.1
+progress: 12.2
+progress: 12.4
+progress: 12.5
+progress: 12.7
+progress: 12.8
+progress: 13.0
+progress: 13.1
+progress: 13.3
+progress: 13.4
+progress: 13.6
+progress: 13.7
+progress: 13.8
+progress: 14.0
+progress: 14.1
+progress: 14.3
+progress: 14.4
+progress: 14.6
+progress: 14.7
+progress: 14.9
+progress: 15.0
+progress: 15.2
+progress: 15.3
+progress: 15.4
+progress: 15.6
+progress: 15.7
+progress: 15.9
+progress: 16.0
+progress: 16.2
+progress: 16.3
+progress: 16.5
+progress: 16.6
+progress: 16.8
+progress: 16.9
+progress: 17.1
+progress: 17.2
+progress: 17.3
+progress: 17.5
+progress: 17.6
+progress: 17.8
+progress: 17.9
+progress: 18.1
+progress: 18.2
+progress: 18.4
+Building compilation database compile_commands.json
+progress: 18.5
+progress: 18.7
+progress: 18.8
+progress: 18.9
+progress: 19.1
+progress: 19.2
+progress: 19.4
+progress: 19.5
+progress: 19.7
+progress: 19.8
+progress: 20.0
+progress: 20.1
+progress: 20.3
+progress: 20.4
+progress: 20.5
+progress: 20.7
+progress: 20.8
+progress: 21.0
+  [CXX] msgq_repo/msgq/visionipc/visionipc.os
+progress: 21.1
+  [CXX] msgq_repo/msgq/visionipc/visionipc_server.os
+progress: 21.3
+  [CXX] msgq_repo/msgq/visionipc/visionipc_client.os
+  [CXX] msgq_repo/msgq/visionipc/visionbuf.os
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 21.4
+progress: 21.6
+progress: 21.7
+progress: 21.9
+progress: 22.0
+progress: 22.2
+progress: 22.3
+progress: 22.4
+progress: 22.6
+progress: 22.7
+progress: 22.9
+progress: 23.0
+progress: 23.2
+progress: 23.3
+progress: 23.5
+progress: 23.6
+progress: 23.8
+progress: 23.9
+progress: 24.0
+progress: 24.2
+progress: 24.3
+progress: 24.5
+progress: 24.6
+progress: 24.8
+progress: 24.9
+progress: 25.1
+progress: 25.2
+progress: 25.4
+progress: 25.5
+progress: 25.6
+progress: 25.8
+progress: 25.9
+progress: 26.1
+  [LINK] msgq_repo/msgq/ipc_pyx.so
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 26.2
+cythonize msgq_repo/msgq/visionipc/visionipc_pyx.pyx
+progress: 26.4
+progress: 26.5
+progress: 26.7
+progress: 26.8
+progress: 27.0
+progress: 27.1
+progress: 27.3
+progress: 27.4
+progress: 27.5
+  [CXX] openpilot/cereal/gen/cpp/car.capnp.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [CXX] openpilot/cereal/gen/cpp/custom.capnp.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [CXX] openpilot/cereal/gen/cpp/deprecated.capnp.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 27.7
+  [CXX] openpilot/cereal/gen/cpp/log.capnp.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [AR] msgq_repo/libvisionipc.a
+ar: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [RANLIB] msgq_repo/libvisionipc.a
+ranlib: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 27.8
+python3 openpilot/cereal/services.py > openpilot/cereal/services.h
+progress: 28.0
+  [CXX] openpilot/cereal/messaging/bridge_zmq.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [CXX] openpilot/cereal/messaging/bridge.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+Compiling /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/msgq_repo/msgq/visionipc/visionipc_pyx.pyx because it changed.
+[1/1] Cythonizing /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/msgq_repo/msgq/visionipc/visionipc_pyx.pyx
+  [CXX] msgq_repo/msgq/visionipc/visionipc_pyx.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [CXX] openpilot/cereal/messaging/msgq_to_zmq.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 28.1
+  [AR] openpilot/cereal/libcereal.a
+ar: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [RANLIB] openpilot/cereal/libcereal.a
+ranlib: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [CXX] openpilot/cereal/messaging/socketmaster.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 28.3
+progress: 28.4
+progress: 28.6
+progress: 28.7
+progress: 28.9
+progress: 29.0
+progress: 29.1
+progress: 29.3
+progress: 29.4
+  [LINK] openpilot/common/libparams_c.dylib
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 29.6
+progress: 29.7
+progress: 29.9
+progress: 30.0
+progress: 30.2
+progress: 30.3
+progress: 30.5
+progress: 30.6
+progress: 30.7
+cd /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/openpilot/selfdrive/controls/lib/longitudinal_mpc_lib && python3 long_mpc.py
+  [LINK] openpilot/cereal/messaging/bridge
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 30.9
+progress: 31.0
+progress: 31.2
+openpilot/selfdrive/locationd/models/car_kf.py car openpilot/selfdrive/locationd/models/generated
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_model.py:55: SyntaxWarning: invalid escape sequence '\d'
+  CasADi expression for the implicit dynamics :math:`f_\\text{impl}(\dot{x}, x, u, z, p) = 0`.
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_model.py:61: SyntaxWarning: invalid escape sequence '\d'
+  CasADi expression for the explicit dynamics :math:`\dot{x} = f_\\text{expl}(x, u, p)`.
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_model.py:112: SyntaxWarning: invalid escape sequence '\p'
+  CasADi expression for the outer loss function :math:`\psi(r, p)`, initial; Default: :code:`None`
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_model.py:117: SyntaxWarning: invalid escape sequence '\p'
+  CasADi expression for the outer loss function :math:`\psi(r, p)`; Default: :code:`None`
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_model.py:122: SyntaxWarning: invalid escape sequence '\p'
+  CasADi expression for the outer loss function :math:`\psi(r, p)`, terminal; Default: :code:`None`
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_model.py:127: SyntaxWarning: invalid escape sequence '\p'
+  CasADi expression for the argument :math:`r`; to the outer loss function :math:`\psi(r, p)`, initial; Default: :code:`None`
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_model.py:132: SyntaxWarning: invalid escape sequence '\p'
+  CasADi expression for the argument :math:`r`; to the outer loss function :math:`\psi(r, p)`; Default: :code:`None`
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_model.py:137: SyntaxWarning: invalid escape sequence '\p'
+  CasADi expression for the argument :math:`r`; to the outer loss function :math:`\psi(r, p)`, terminal; Default: :code:`None`
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:119: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`n_{\pi}` - dimension of the image of the inner nonlinear function in positive definite constraints.
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:125: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`n_{\pi}^e` - dimension of the image of the inner nonlinear function in positive definite constraints.
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:143: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`n_{\phi}` - number of convex-over-nonlinear constraints.
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:149: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`n_{\phi}^e` - number of convex-over-nonlinear constraints at terminal shooting node N.
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:227: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`n_{{s\phi}}` - number of soft convex-over-nonlinear constraints.
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:233: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`n_{{s\phi}^e}` - number of soft convex-over-nonlinear constraints at terminal shooting node N.
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:500: SyntaxWarning: invalid escape sequence '\D'
+  This means given the time steps are :math:`\Delta t_0,..., \Delta t_N`, the total cost is given by:
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:1193: SyntaxWarning: invalid escape sequence '\,'
+  """:math:`C` - C matrix in :math:`\\underline{g} \\leq D \, u + C \, x \\leq \\bar{g}`
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:1201: SyntaxWarning: invalid escape sequence '\,'
+  """:math:`D` - D matrix in :math:`\\underline{g} \\leq D \, u + C \, x \\leq \\bar{g}`
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:1285: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`\\underline{\phi}` - lower bound for convex-over-nonlinear inequalities
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:1293: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`\\bar{\phi}` - upper bound for convex-over-nonlinear inequalities
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:1302: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`\\underline{\phi}^e` - lower bound on convex-over-nonlinear inequalities
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:1310: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`\\bar{\phi}^e` - upper bound on convex-over-nonlinear inequalities
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:1485: SyntaxWarning: invalid escape sequence '\p'
+  """:math:`J_{s, \phi}` - matrix coefficient for soft bounds on convex-over-nonlinear constraints.
+/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp.py:1572: SyntaxWarning: invalid escape sequence '\m'
+  """:math:`x_0 \\in \mathbb{R}^{n_x}` - initial state --
+  [LINK] msgq_repo/msgq/visionipc/visionipc_pyx.so
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 31.3
+progress: 31.5
+openpilot/selfdrive/locationd/models/pose_kf.py pose openpilot/selfdrive/locationd/models/generated
+  [AR] openpilot/cereal/libsocketmaster.a
+ar: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [RANLIB] openpilot/cereal/libsocketmaster.a
+ranlib: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 31.6
+progress: 31.8
+progress: 31.9
+progress: 32.1
+progress: 32.2
+progress: 32.4
+progress: 32.5
+progress: 32.6
+progress: 32.8
+progress: 32.9
+progress: 33.1
+progress: 33.2
+progress: 33.4
+progress: 33.5
+progress: 33.7
+progress: 33.8
+progress: 34.0
+progress: 34.1
+progress: 34.2
+progress: 34.4
+progress: 34.5
+progress: 34.7
+progress: 34.8
+progress: 35.0
+progress: 35.1
+progress: 35.3
+progress: 35.4
+progress: 35.6
+progress: 35.7
+progress: 35.8
+progress: 36.0
+progress: 36.1
+progress: 36.3
+progress: 36.4
+progress: 36.6
+progress: 36.7
+progress: 36.9
+progress: 37.0
+progress: 37.2
+progress: 37.3
+progress: 37.5
+progress: 37.6
+progress: 37.7
+progress: 37.9
+progress: 38.0
+progress: 38.2
+progress: 38.3
+progress: 38.5
+progress: 38.6
+progress: 38.8
+progress: 38.9
+progress: 39.1
+progress: 39.2
+progress: 39.3
+progress: 39.5
+progress: 39.6
+progress: 39.8
+progress: 39.9
+progress: 40.1
+progress: 40.2
+progress: 40.4
+progress: 40.5
+progress: 40.7
+progress: 40.8
+progress: 41.0
+progress: 41.1
+progress: 41.2
+progress: 41.4
+progress: 41.5
+progress: 41.7
+progress: 41.8
+progress: 42.0
+progress: 42.1
+progress: 42.3
+progress: 42.4
+progress: 42.6
+progress: 42.7
+progress: 42.8
+progress: 43.0
+progress: 43.1
+progress: 43.3
+progress: 43.4
+progress: 43.6
+progress: 43.7
+progress: 43.9
+progress: 44.0
+progress: 44.2
+progress: 44.3
+progress: 44.4
+progress: 44.6
+progress: 44.7
+progress: 44.9
+progress: 45.0
+progress: 45.2
+progress: 45.3
+progress: 45.5
+progress: 45.6
+progress: 45.8
+progress: 45.9
+progress: 46.1
+progress: 46.2
+progress: 46.3
+progress: 46.5
+progress: 46.6
+progress: 46.8
+progress: 46.9
+progress: 47.1
+progress: 47.2
+progress: 47.4
+progress: 47.5
+progress: 47.7
+progress: 47.8
+progress: 47.9
+progress: 48.1
+progress: 48.2
+progress: 48.4
+progress: 48.5
+progress: 48.7
+progress: 48.8
+progress: 49.0
+progress: 49.1
+progress: 49.3
+progress: 49.4
+progress: 49.5
+progress: 49.7
+progress: 49.8
+progress: 50.0
+progress: 50.1
+progress: 50.3
+progress: 50.4
+progress: 50.6
+progress: 50.7
+progress: 50.9
+progress: 51.0
+progress: 51.2
+progress: 51.3
+progress: 51.4
+progress: 51.6
+progress: 51.7
+progress: 51.9
+progress: 52.0
+progress: 52.2
+progress: 52.3
+progress: 52.5
+progress: 52.6
+progress: 52.8
+progress: 52.9
+progress: 53.0
+progress: 53.2
+progress: 53.3
+progress: 53.5
+progress: 53.6
+progress: 53.8
+progress: 53.9
+progress: 54.1
+progress: 54.2
+progress: 54.4
+progress: 54.5
+progress: 54.6
+progress: 54.8
+progress: 54.9
+progress: 55.1
+progress: 55.2
+progress: 55.4
+progress: 55.5
+progress: 55.7
+progress: 55.8
+progress: 56.0
+progress: 56.1
+progress: 56.3
+progress: 56.4
+progress: 56.5
+progress: 56.7
+progress: 56.8
+progress: 57.0
+progress: 57.1
+progress: 57.3
+progress: 57.4
+progress: 57.6
+progress: 57.7
+progress: 57.9
+progress: 58.0
+progress: 58.1
+progress: 58.3
+progress: 58.4
+progress: 58.6
+progress: 58.7
+progress: 58.9
+progress: 59.0
+progress: 59.2
+progress: 59.3
+progress: 59.5
+progress: 59.6
+progress: 59.7
+progress: 59.9
+progress: 60.0
+progress: 60.2
+progress: 60.3
+progress: 60.5
+progress: 60.6
+progress: 60.8
+progress: 60.9
+progress: 61.1
+progress: 61.2
+progress: 61.4
+progress: 61.5
+progress: 61.6
+progress: 61.8
+progress: 61.9
+progress: 62.1
+progress: 62.2
+progress: 62.4
+progress: 62.5
+progress: 62.7
+progress: 62.8
+progress: 63.0
+progress: 63.1
+progress: 63.2
+progress: 63.4
+progress: 63.5
+progress: 63.7
+progress: 63.8
+progress: 64.0
+progress: 64.1
+progress: 64.3
+progress: 64.4
+progress: 64.6
+progress: 64.7
+progress: 64.8
+progress: 65.0
+progress: 65.1
+progress: 65.3
+progress: 65.4
+progress: 65.6
+progress: 65.7
+progress: 65.9
+progress: 66.0
+progress: 66.2
+progress: 66.3
+progress: 66.5
+progress: 66.6
+progress: 66.7
+progress: 66.9
+progress: 67.0
+progress: 67.2
+progress: 67.3
+progress: 67.5
+progress: 67.6
+progress: 67.8
+progress: 67.9
+progress: 68.1
+progress: 68.2
+progress: 68.3
+progress: 68.5
+progress: 68.6
+progress: 68.8
+progress: 68.9
+progress: 69.1
+progress: 69.2
+progress: 69.4
+progress: 69.5
+progress: 69.7
+progress: 69.8
+progress: 70.0
+progress: 70.1
+progress: 70.2
+progress: 70.4
+progress: 70.5
+progress: 70.7
+progress: 70.8
+progress: 71.0
+progress: 71.1
+progress: 71.3
+progress: 71.4
+progress: 71.6
+progress: 71.7
+progress: 71.8
+progress: 72.0
+progress: 72.1
+progress: 72.3
+progress: 72.4
+progress: 72.6
+progress: 72.7
+progress: 72.9
+progress: 73.0
+progress: 73.2
+progress: 73.3
+progress: 73.4
+progress: 73.6
+progress: 73.7
+progress: 73.9
+progress: 74.0
+progress: 74.2
+progress: 74.3
+progress: 74.5
+progress: 74.6
+progress: 74.8
+progress: 74.9
+progress: 75.1
+progress: 75.2
+progress: 75.3
+progress: 75.5
+progress: 75.6
+progress: 75.8
+progress: 75.9
+progress: 76.1
+progress: 76.2
+progress: 76.4
+progress: 76.5
+progress: 76.7
+progress: 76.8
+progress: 76.9
+progress: 77.1
+progress: 77.2
+progress: 77.4
+progress: 77.5
+progress: 77.7
+progress: 77.8
+progress: 78.0
+progress: 78.1
+progress: 78.3
+progress: 78.4
+progress: 78.5
+progress: 78.7
+progress: 78.8
+progress: 79.0
+progress: 79.1
+progress: 79.3
+progress: 79.4
+DEV=METAL JIT=2 HOME=/Users/alex python3 "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/examples/openpilot/compile_warp.py" --frame 1344,760,1408,768,384,2428928 --warp-to 1440x960 --layout luma --border-fill 16 --transform-device NPY --output /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/openpilot/selfdrive/modeld/models/dm_warp_1344x760_tinygrad.pkl
+Warning: Please note that the following versions of CasADi  are officially supported: 3.5.6 or 3.5.5 or 3.5.4 or 3.5.3 or 3.5.2 or 3.5.1 or 3.4.5 or 3.4.0.
+ If there is an incompatibility with the CasADi generated code, please consider changing your CasADi version.
+Version 3.6.7 currently in use.
+progress: 79.6
+  [CC] openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/c_generated_code/long_model/long_expl_vde_forw.os
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [CC] openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/c_generated_code/long_cost/long_cost_y_hess.os
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+cython -o /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/c_generated_code/acados_ocp_solver_pyx.c -I /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/c_generated_code -I /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/.venv/lib/python3.12/site-packages/acados/acados_template/acados_ocp_solver_pyx.pyx
+  [CXX] openpilot/selfdrive/locationd/models/generated/car.os
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 79.7
+  [CXX] openpilot/selfdrive/locationd/models/generated/pose.os
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 79.9
+progress: 80.0
+progress: 80.2
+  [CC] openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/c_generated_code/acados_ocp_solver_pyx.o
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+Traceback (most recent call last):
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/examples/openpilot/compile_warp.py", line 131, in <module>
+    expected = benchmark(run, **(inputs:=make_inputs(42)))
+                                         ^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/examples/openpilot/compile_warp.py", line 124, in make_inputs
+    return allocate_inputs(specs, initialize)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/examples/openpilot/helpers.py", line 14, in allocate_inputs
+    return {name: Tensor(arrays[name], device=device).realize() for name, (_, _, device) in input_specs.items()}
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/tensor.py", line 586, in _wrapper
+    ret = fn(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/tensor.py", line 224, in realize
+    run_linear(linear, var_vals, update_stats=do_update_stats)
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/engine/realize.py", line 284, in run_linear
+    if not jit: linear = link_linear(compile_linear(linear, validate=VALIDATE_WITH_CPU, input_uops=inputs, cache=True), input_uops=inputs)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/engine/realize.py", line 274, in compile_linear
+    linear = hcq_compile(linear, input_uops, bool(PROFILE or DEBUG >= 2) if profile is None else profile, cache=cache)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/uop/ops.py", line 1678, in __wrapper
+    ret = func(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/runtime/support/hcq2.py", line 519, in hcq_compile
+    linear = graph_rewrite(linear, pm_unwrap_multi+pm_insert_copy_staging+pm_flatten_linear, name="prep calls")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/uop/ops.py", line 1659, in __wrapper
+    if TRACK_MATCH_STATS < 2 and not new_ctx: return func(*args, **kwargs)
+                                                     ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/uop/ops.py", line 1879, in graph_rewrite
+    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/uop/ops.py", line 1849, in unified_rewrite
+    if self.pm is None or (new_src_n:=self.pm_rewrite(new_n)) is None:
+                                      ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/uop/ops.py", line 1772, in pm_rewrite
+    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/uop/ops.py", line 1603, in rewrite
+    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret
+             ^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/uop/ops.py", line 1577, in lazy_compile
+    return entry[1](uop, ctx)
+           ^^^^^^^^^^^^^^^^^^
+  File "<string>", line 3, in compiled_match
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/runtime/support/hcq2.py", line 132, in split_rdma
+    if not all(hasattr(Device[d], "iface") for d in devs) or Device[devs[0]].peer_group == Device[devs[1]].peer_group: return None # not 2 nodes
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/runtime/support/hcq2.py", line 132, in <genexpr>
+    if not all(hasattr(Device[d], "iface") for d in devs) or Device[devs[0]].peer_group == Device[devs[1]].peer_group: return None # not 2 nodes
+                       ~~~~~~^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/device.py", line 29, in __getitem__
+    return self.__get_canonicalized_item(ix)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/device.py", line 37, in __get_canonicalized_item
+    ret = self.get_class(ix)(ix)
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/alex/Apps/openpilot/.navigator-master-integration-20261014/tinygrad_repo/tinygrad/runtime/ops_metal.py", line 201, in __init__
+    if self.queue.value is None: raise RuntimeError("Cannot allocate a new command queue")
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Cannot allocate a new command queue
+scons: *** [openpilot/selfdrive/modeld/models/dm_warp_1344x760_tinygrad.pkl] Error 1
+scons: building terminated because of errors.
