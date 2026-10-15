@@ -65,7 +65,7 @@ class Car:
 
   def __init__(self, CI=None, RI=None) -> None:
     self.can_sock = messaging.sub_sock('can', timeout=20)
-    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents'])
+    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents', 'modelV2'])
     self.pm = messaging.PubMaster(['sendcan', 'carState', 'carParams', 'carOutput', 'radarTracks'])
 
     self.can_rcv_cum_timeout_counter = 0
@@ -109,6 +109,17 @@ class Car:
     else:
       self.CI, self.CP = CI, CI.CP
       self.RI = RI
+
+    # Explicit offroad trial selection; missing/default parameter preserves baseline.
+    self.tracking_trial = None
+    self.tracking_state_ns = 0
+    if self.params.get_bool("FordPrefPersistentTracking") and self.CI.CC is not None:
+      from opendbc.car.ford.values import CAR, FordFlags
+      if (self.CP.carFingerprint == CAR.FORD_EXPEDITION_MK4
+          and self.CP.flags & FordFlags.PINION_CURVATURE and self.CP.flags & FordFlags.LOW_SPEED_GAIN):
+        from opendbc.car.ford.lateral_angle_tracking_release import ReleaseTrackingPrototype
+        self.tracking_trial = ReleaseTrackingPrototype(self.CP, enabled=True)
+        self.CI.CC.lateral_angle = self.tracking_trial
 
     self.CP.alternativeExperience = 0
     openpilot_enabled_toggle = self.params.get_bool("OpenpilotEnabledToggle")
@@ -174,6 +185,9 @@ class Car:
     self.sm.update(0)
 
     can_rcv_valid = len(can_strs) > 0
+    if self.tracking_trial is not None and can_rcv_valid:
+      self.tracking_state_ns = messaging.log_from_bytes(can_strs[-1]).logMonoTime
+
 
     # Check for CAN timeout
     if not can_rcv_valid:
@@ -236,6 +250,15 @@ class Car:
     if self.sm.all_alive(['carControl']):
       # send car controls over can
       now_nanos = self.can_log_mono_time if REPLAY else int(time.monotonic() * 1e9)
+      if self.tracking_trial is not None:
+        from openpilot.selfdrive.car.tracking_context import feed_tracking_context
+        feed_tracking_context(self.tracking_trial, now_ns=now_nanos,
+                              state_ns=self.tracking_state_ns,
+                              control_ns=self.sm.logMonoTime['carControl'],
+                              control_valid=self.sm.valid['carControl'],
+                              model_ns=self.sm.logMonoTime['modelV2'],
+                              model_valid=self.sm.valid['modelV2'],
+                              model=self.sm['modelV2'], state=CS)
       self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos)
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
 
