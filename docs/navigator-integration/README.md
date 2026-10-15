@@ -21,13 +21,13 @@ AGNOS 19.9, current model/Chestnut requirements and automatic Ford checksum gene
 
 The full child suite passes: **3746 tests**, **1690 skips**, **24673 passing subtests**, including normal MISRA mutation checks. The build uses an unsanitized native debug safety library on macOS; no sanitizer result is claimed. Targeted parent UI/Params tests and all four real Params-to-Ford startup option combinations pass. Matching H7 firmware and native Params/messaging targets build locally.
 
-The full minimal Mac build first stopped at Metal command-queue allocation under the sandbox. A retry with normal GPU access progressed to missing LLVM shared-library support during model warp compilation. Full parent pytest collection also stops on missing generated native solver/localizer artifacts and optional dependencies. Those failures are recorded in the logs; this is not a completed full openpilot build or full parent-suite pass, and it is not device/road validation.
+The original local build and collection blockers are resolved. Both the full minimal and full development Mac builds pass, including real model compilation, Cabana and generated native solvers. The complete project-scoped parent suite (`pytest openpilot`) passes: **957 passed, 86 skipped, 1 expected failure and 343 passing subtests**. Test-only macOS portability fixes preserve the functional assertions; vehicle control code and the paired child revision are unchanged. See [Mac validation and reproduction](MAC_VALIDATION.md) and the new `validation-*` logs. Earlier failed logs remain historical evidence. This does not establish AGNOS or Chestnut runtime behavior.
 
 Final 45-segment replay uses the real trial selector and compiled final safety hooks: **252406 controller updates, 10082330 received CAN frames, 148765 accepted TX and zero rejected TX**. Complete generated CAN streams are byte-identical to the previous trial on all three saved drives. The 12425 messages at or above 45 mph match the regular pinion baseline. With both options off, all three complete CAN stream hashes also match the preserved original baseline; its existing one-angle rejection remains unchanged. Each drive has one initial RX warmup invalid tick, and pre-configuration TX is excluded.
 
 The latest drive's recorded relevant RX/all-TX replay has the same two angle and eight button rejections as before; it does not equate those counts to hardware blocked counters or simulate changed vehicle response. A fresh-context source review found no important actionable issues in the paired implementation. These checks do not reproduce full forwarding/hardware behavior or provide sanitizer coverage.
 
-Publication, installation, AGNOS migration, a complete supported build and road evaluation remain separate steps. See `replay-summary.json`, the mode-specific JSON files and `provenance.json` for exact evidence.
+Publication, AGNOS target verification, installation and road evaluation remain separate steps. See `replay-summary.json`, the mode-specific JSON files and `provenance.json` for exact evidence.
 
 ## Reproducing the focused checks
 

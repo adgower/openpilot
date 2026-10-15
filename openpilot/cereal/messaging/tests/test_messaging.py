@@ -47,6 +47,13 @@ def delayed_send(delay, sock, dat):
   threading.Timer(delay, send_func).start()
 
 
+def recv_one_retry_in_process(service, timeout, ready):
+  # Native sockets cannot be pickled by multiprocessing's spawn start method.
+  sock = messaging.sub_sock(service, timeout=timeout)
+  ready.set()
+  messaging.recv_one_retry(sock)
+
+
 class TestMessaging(OpenpilotTestCase):
   @parameterized.expand(events)
   def test_new_message(self, evt):
@@ -148,11 +155,16 @@ class TestMessaging(OpenpilotTestCase):
     sub_sock = messaging.sub_sock(sock, timeout=round(sock_timeout*1000))
 
     # wait 5 socket timeouts and make sure it's still retrying
-    p = multiprocessing.Process(target=messaging.recv_one_retry, args=(sub_sock,))
+    ready = multiprocessing.Event()
+    p = multiprocessing.Process(target=recv_one_retry_in_process, args=(sock, round(sock_timeout*1000), ready))
     p.start()
-    time.sleep(sock_timeout*5)
-    assert p.is_alive()
-    p.terminate()
+    try:
+      assert ready.wait(timeout=5), "receiver process did not initialize"
+      time.sleep(sock_timeout*5)
+      assert p.is_alive()
+    finally:
+      p.terminate()
+      p.join(timeout=5)
 
     # wait 5 socket timeouts before sending
     msg = random_carstate()

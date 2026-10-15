@@ -28,9 +28,7 @@ class EchoSocket:
         else:
           break
     finally:
-      conn.shutdown(0)
       conn.close()
-      self.socket.shutdown(0)
       self.socket.close()
 
 

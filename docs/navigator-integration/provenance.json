@@ -7,5 +7,14 @@
   "panda_h7_sha256": "5a10a6119110b3c41a03d381c4bdd3bea4e05c3a7164bef515b42df7054c466e",
   "independent_review": "No important actionable findings; source review of parent21fd666e2 and childc09baff5",
   "device_access_this_task": false,
-  "published": false
+  "published": false,
+  "mac_validation": {
+    "date": "2026-10-14",
+    "minimal_build": "passed",
+    "development_build": "passed",
+    "parent_pytest": "957 passed, 86 skipped, 1 xfailed, 343 subtests passed",
+    "scope": "pytest openpilot; child suite recorded separately",
+    "changes": "test portability and documentation only; vehicle controls unchanged",
+    "review": "No important actionable findings in five test files"
+  }
 }

@@ -127,6 +127,10 @@ def test_process(cfg, lr, segment, ref_log_msgs, new_log_path, ignore_fields=Non
     return str(e), log_msgs
 
 
+# This helper receives configuration/logs from the CLI runner, not pytest fixtures.
+test_process.__test__ = False
+
+
 if __name__ == "__main__":
   all_cars = {car for car, _ in segments}
   all_procs = {cfg.proc_name for cfg in CONFIGS if cfg.proc_name not in EXCLUDED_PROCS}

@@ -1,0 +1,165 @@
+scons: Reading SConscript files ...
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+scons: done reading SConscript files.
+scons: Building targets ...
+progress: 0.9
+progress: 1.8
+cythonize rednose_repo/rednose/helpers/ekf_sym_pyx.pyx
+progress: 2.7
+progress: 3.6
+progress: 4.5
+progress: 5.4
+progress: 6.3
+progress: 7.2
+progress: 8.1
+progress: 8.9
+progress: 9.8
+progress: 10.7
+progress: 11.6
+progress: 12.5
+progress: 13.4
+progress: 14.3
+progress: 15.2
+progress: 16.1
+progress: 17.0
+progress: 17.9
+progress: 18.8
+progress: 19.7
+progress: 20.6
+progress: 21.5
+progress: 22.4
+progress: 23.3
+progress: 24.2
+progress: 25.0
+progress: 25.9
+progress: 26.8
+progress: 27.7
+progress: 28.6
+progress: 29.5
+progress: 30.4
+progress: 31.3
+progress: 32.2
+progress: 33.1
+progress: 34.0
+progress: 34.9
+progress: 35.8
+progress: 36.7
+progress: 37.6
+progress: 38.5
+progress: 39.4
+progress: 40.3
+progress: 41.1
+progress: 42.0
+progress: 42.9
+progress: 43.8
+progress: 44.7
+progress: 45.6
+  [CXX] rednose_repo/rednose/helpers/ekf_sym.os
+  [CXX] rednose_repo/rednose/helpers/ekf_load.os
+progress: 46.5
+progress: 47.4
+progress: 48.3
+progress: 49.2
+progress: 50.1
+progress: 51.0
+progress: 51.9
+progress: 52.8
+progress: 53.7
+progress: 54.6
+progress: 55.5
+progress: 56.4
+progress: 57.2
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+progress: 58.1
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [LINK] openpilot/selfdrive/locationd/models/generated/libcar.dylib
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+prune_cache_dir(["openpilot/selfdrive/locationd/models/generated/libcar.dylib"], ["openpilot/selfdrive/locationd/models/generated/car.os"])
+progress: 59.0
+progress: 59.9
+progress: 60.8
+progress: 61.7
+progress: 62.6
+progress: 63.5
+progress: 64.4
+progress: 65.3
+progress: 66.2
+progress: 67.1
+progress: 68.0
+progress: 68.9
+progress: 69.8
+progress: 70.7
+progress: 71.6
+progress: 72.5
+progress: 73.3
+progress: 74.2
+progress: 75.1
+progress: 76.0
+progress: 76.9
+progress: 77.8
+progress: 78.7
+progress: 79.6
+progress: 80.5
+progress: 81.4
+progress: 82.3
+progress: 83.2
+progress: 84.1
+progress: 85.0
+progress: 85.9
+progress: 86.8
+progress: 87.7
+progress: 88.6
+progress: 89.4
+progress: 90.3
+progress: 91.2
+progress: 92.1
+progress: 93.0
+progress: 93.9
+progress: 94.8
+progress: 95.7
+progress: 96.6
+progress: 97.5
+progress: 98.4
+progress: 99.3
+progress: 100.0
+  [LINK] openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/c_generated_code/acados_ocp_solver_pyx.so
+gcc: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+prune_cache_dir(["openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/c_generated_code/acados_ocp_solver_pyx.so"], ["openpilot/selfdrive/controls/lib/longitudinal_mpc_lib/c_generated_code/acados_ocp_solver_pyx.o"])
+Compiling /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/rednose_repo/rednose/helpers/ekf_sym_pyx.pyx because it changed.
+[1/1] Cythonizing /Users/alex/Apps/openpilot/.navigator-master-integration-20261014/rednose_repo/rednose/helpers/ekf_sym_pyx.pyx
+  [CXX] rednose_repo/rednose/helpers/ekf_sym_pyx.o
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+  [LINK] rednose_repo/rednose/helpers/ekf_sym_pyx.so
+g++: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+xcrun: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+ld: warning: ignoring duplicate libraries: '-lzmq'
+prune_cache_dir(["rednose_repo/rednose/helpers/ekf_sym_pyx.so"], ["rednose_repo/rednose/helpers/ekf_sym_pyx.o", "rednose_repo/rednose/helpers/ekf_load.os", "rednose_repo/rednose/helpers/ekf_sym.os"])
+scons: done building targets.

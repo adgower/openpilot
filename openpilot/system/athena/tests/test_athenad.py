@@ -1,9 +1,9 @@
 from functools import wraps
 import json
-import multiprocessing
 import os
 import requests
 import shutil
+import socket
 import time
 import threading
 import queue
@@ -134,7 +134,7 @@ class TestAthenadMethods(OpenpilotTestCase):
     with self.assertRaises(TimeoutError) as _:
       dispatcher["getMessage"]("controlsState")
 
-    end_event = multiprocessing.Event()
+    end_event = threading.Event()
 
     pub_sock = messaging.pub_sock("deviceState")
 
@@ -144,7 +144,7 @@ class TestAthenadMethods(OpenpilotTestCase):
         pub_sock.send(msg.to_bytes())
         time.sleep(0.01)
 
-    p = multiprocessing.Process(target=send_deviceState)
+    p = threading.Thread(target=send_deviceState)
     p.start()
     time.sleep(0.1)
     try:
@@ -453,6 +453,12 @@ class TestAthenadMethods(OpenpilotTestCase):
     ws_recv = queue.Queue()
     ws_send = queue.Queue()
     mock_ws = MockWebsocket(ws_recv, ws_send)
+    # Give select() a real readable descriptor instead of relying on an
+    # unconnected TCP socket, whose readiness differs between Linux and macOS.
+    readable, signal = socket.socketpair()
+    mock_ws.sock.close()
+    mock_ws.sock = mocker.Mock(wraps=readable)
+    mock_ws.sock.setsockopt = mocker.Mock()
     mock_create_connection.return_value = mock_ws
 
     echo_socket = EchoSocket(0)
@@ -464,10 +470,12 @@ class TestAthenadMethods(OpenpilotTestCase):
     athenad.startLocalProxy(end_event, 'ws://localhost:1234', port)
 
     ws_recv.put_nowait(b'ping')
+    signal.send(b'1')
     try:
       recv = ws_send.get(timeout=5)
       assert recv == (b'ping', ABNF.OPCODE_BINARY), recv
     finally:
+      signal.close()
       # signal websocket close to athenad.ws_proxy_recv
       ws_recv.put_nowait(WebSocketConnectionClosedException())
       socket_thread.join()
