@@ -1,3 +1,5 @@
+[Current bounded wait/catch-up revision and limits](WAIT_CATCHUP_20261015.md). The baseline snapshot and historical validation below describe earlier integration stages.
+
 # Navigator master integration
 
 This personal fork ports the installed Navigator steering trial onto public openpilot master snapshot `6eb63e045469a582f4c7b406705543e891113606` and its mass-normalized opendbc base `b3bd79a659dae961af169a3baac723961f720133`. The local branch is `codex/navigator-master-integration` in both repositories. It has not been published or installed on the Comma.
