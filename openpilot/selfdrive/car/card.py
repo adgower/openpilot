@@ -113,12 +113,10 @@ class Car:
     # Explicit offroad trial selection; missing/default parameter preserves baseline.
     self.tracking_trial = None
     self.tracking_state_ns = 0
-    if self.params.get_bool("FordPrefPersistentTracking") and self.CI.CC is not None:
-      from opendbc.car.ford.values import CAR, FordFlags
-      if (self.CP.carFingerprint == CAR.FORD_EXPEDITION_MK4
-          and self.CP.flags & FordFlags.PINION_CURVATURE and self.CP.flags & FordFlags.LOW_SPEED_GAIN):
-        from opendbc.car.ford.lateral_angle_tracking_release import ReleaseTrackingPrototype
-        self.tracking_trial = ReleaseTrackingPrototype(self.CP, enabled=True)
+    if self.CI.CC is not None:
+      from openpilot.selfdrive.car.tracking_context import create_tracking_trial
+      self.tracking_trial = create_tracking_trial(self.CP, enabled=self.params.get_bool("FordPrefPersistentTracking"))
+      if self.tracking_trial is not None:
         self.CI.CC.lateral_angle = self.tracking_trial
 
     self.CP.alternativeExperience = 0
