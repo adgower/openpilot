@@ -1,3 +1,5 @@
+[Current body-confirmed high-speed integration and validation](HIGH_SPEED_20261018.md).
+
 [Current atomic calibration / roll-mapping integration and validation](ROLL_MAPPING_20261017.md).
 
 [Current bounded wait/catch-up revision and limits](WAIT_CATCHUP_20261015.md). The baseline snapshot and historical validation below describe earlier integration stages.

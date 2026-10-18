@@ -65,7 +65,7 @@ class Car:
 
   def __init__(self, CI=None, RI=None) -> None:
     self.can_sock = messaging.sub_sock('can', timeout=20)
-    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents', 'modelV2'])
+    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents', 'modelV2', 'deviceMotion', 'extrinsicsCalibration'])
     self.pm = messaging.PubMaster(['sendcan', 'carState', 'carParams', 'carOutput', 'radarTracks'])
 
     self.can_rcv_cum_timeout_counter = 0
@@ -112,14 +112,19 @@ class Car:
 
     # Explicit offroad trial selection; missing/default parameter preserves baseline.
     self.tracking_trial = None
+    self.tracking_motion = None
     self.tracking_state_ns = 0
     if self.CI.CC is not None:
-      from openpilot.selfdrive.car.tracking_context import create_tracking_trial
+      from openpilot.selfdrive.car.tracking_context import create_tracking_trial, high_speed_opt_in
       from openpilot.selfdrive.car.calibration_context import roll_mapping_opt_in
       self.tracking_trial = create_tracking_trial(self.CP, enabled=self.params.get_bool("FordPrefPersistentTracking"),
-                                                  roll_mapping_enabled=roll_mapping_opt_in(self.params))
+                                                  roll_mapping_enabled=roll_mapping_opt_in(self.params),
+                                                  high_speed_enabled=high_speed_opt_in(self.params))
       if self.tracking_trial is not None:
         self.CI.CC.lateral_angle = self.tracking_trial
+        if hasattr(self.tracking_trial, "set_motion"):
+          from openpilot.selfdrive.car.motion_context import MotionContext
+          self.tracking_motion = MotionContext()
 
     self.CP.alternativeExperience = 0
     openpilot_enabled_toggle = self.params.get_bool("OpenpilotEnabledToggle")
@@ -264,6 +269,10 @@ class Car:
         feed_calibration_context(self.tracking_trial, CC, now_ns=now_nanos,
                                  control_ns=self.sm.logMonoTime['carControl'],
                                  control_valid=self.sm.valid['carControl'])
+      if self.tracking_trial is not None and hasattr(self.tracking_trial, "set_motion"):
+        from openpilot.selfdrive.car.motion_context import feed_motion_context
+        feed_motion_context(self.tracking_trial, getattr(self, "tracking_motion", None), self.sm,
+                            now_ns=now_nanos, state_valid=CS.canValid, replay=REPLAY)
       self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos)
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
 
