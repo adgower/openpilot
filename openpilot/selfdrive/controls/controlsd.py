@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import math
+import time
 from numbers import Number
 
 from openpilot.cereal import log
@@ -146,6 +147,15 @@ class Controls:
         cloudlog.error(f"actuators.{p} not finite {actuators.to_dict()}")
         setattr(actuators, p, 0.0)
 
+    # Snapshot the exact producer inputs, after computing/sanitizing this target.
+    from opendbc.car.ford.values import CAR, FordFlags
+    if (self.CP.carFingerprint == CAR.FORD_EXPEDITION_MK4
+        and self.CP.flags & FordFlags.PINION_CURVATURE):
+      from openpilot.selfdrive.car.calibration_context import stamp_calibration
+      stamp_calibration(CC, lp, now_ns=time.monotonic_ns(),
+                        source_ns=self.sm.logMonoTime['vehicleParameters'],
+                        state_ns=self.sm.logMonoTime['carState'], speed=CS.vEgo,
+                        valid=self.sm.valid['vehicleParameters'] and self.sm.valid['carState'])
     return CC, lac_log
 
   def publish(self, CC, lac_log):

@@ -1,3 +1,5 @@
+[Current atomic calibration / roll-mapping integration and validation](ROLL_MAPPING_20261017.md).
+
 [Current bounded wait/catch-up revision and limits](WAIT_CATCHUP_20261015.md). The baseline snapshot and historical validation below describe earlier integration stages.
 
 # Navigator master integration

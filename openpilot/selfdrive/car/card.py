@@ -115,7 +115,9 @@ class Car:
     self.tracking_state_ns = 0
     if self.CI.CC is not None:
       from openpilot.selfdrive.car.tracking_context import create_tracking_trial
-      self.tracking_trial = create_tracking_trial(self.CP, enabled=self.params.get_bool("FordPrefPersistentTracking"))
+      from openpilot.selfdrive.car.calibration_context import roll_mapping_opt_in
+      self.tracking_trial = create_tracking_trial(self.CP, enabled=self.params.get_bool("FordPrefPersistentTracking"),
+                                                  roll_mapping_enabled=roll_mapping_opt_in(self.params))
       if self.tracking_trial is not None:
         self.CI.CC.lateral_angle = self.tracking_trial
 
@@ -257,6 +259,11 @@ class Car:
                               model_ns=self.sm.logMonoTime['modelV2'],
                               model_valid=self.sm.valid['modelV2'],
                               model=self.sm['modelV2'], state=CS)
+      if self.tracking_trial is not None and hasattr(self.tracking_trial, "set_calibration"):
+        from openpilot.selfdrive.car.calibration_context import feed_calibration_context
+        feed_calibration_context(self.tracking_trial, CC, now_ns=now_nanos,
+                                 control_ns=self.sm.logMonoTime['carControl'],
+                                 control_valid=self.sm.valid['carControl'])
       self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos)
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
 
