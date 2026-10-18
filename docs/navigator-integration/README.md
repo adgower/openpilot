@@ -50,3 +50,7 @@ The [device settings snapshot](DEVICE_SETTINGS_SNAPSHOT.md) records the earlier 
 The custom opendbc commit is pinned as a gitlink and the submodule URL points to Alex's fork. A public clean clone cannot fetch unpublished child commits yet. Publish the reviewed child and parent branches together when authorized, verify both remote SHAs, and test cloning before planning device installation.
 
 The longitudinal coordination candidate, MADS, automatic calibration and new smoothing changes are intentionally outside this baseline.
+
+## Calibrated high-speed wheel-target/unwind
+
+See [paired integration](WHEEL_TARGET_20261018.md) for the locally integrated policy and evidence boundaries. It uses the existing high-speed opt-in and keeps the old controller as an independent reference. Device installation and road evaluation are separate.

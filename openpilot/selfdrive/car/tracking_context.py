@@ -15,9 +15,9 @@ def create_tracking_trial(CP, *, enabled, roll_mapping_enabled=False, high_speed
   if not enabled or CP.carFingerprint != CAR.FORD_EXPEDITION_MK4 or not CP.flags & FordFlags.PINION_CURVATURE or not CP.flags & FordFlags.LOW_SPEED_GAIN:
     return None
   if roll_mapping_enabled and high_speed_enabled:
-    from opendbc.car.ford.lateral_angle_high_speed import HighSpeedReduction
+    from opendbc.car.ford.lateral_angle_wheel_target import CalibratedWheelTargetReduction
 
-    return HighSpeedReduction(CP, enabled=True)
+    return CalibratedWheelTargetReduction(CP, enabled=True)
   if roll_mapping_enabled:
     from opendbc.car.ford.lateral_angle_roll_mapping import RollAwareMapping
 
