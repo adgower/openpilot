@@ -58,3 +58,7 @@ See [paired integration](WHEEL_TARGET_20261018.md) for the locally integrated po
 - [Bounded sustained tracking and independent-history unwind](SUSTAINED_UNWIND_20261019.md): local paired integration; validation and scope recorded with the companion evidence package.
 
 - [Calibrated tracking, bounded mid-speed correction and resolution-aware rearm](CALIBRATED_MID_REARM_20261020.md): local paired integration; preserved prerequisites and native limits, with separate controller/build and road proof.
+
+## Earlier bounded unwind onset — October20
+
+See [paired onset integration](EARLIER_UNWIND_ONSET_20261020.md). Local source/build proof; no device activation or physical improvement claim.

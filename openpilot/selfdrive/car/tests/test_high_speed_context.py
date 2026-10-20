@@ -16,7 +16,7 @@ def params():
 def test_high_speed_factory_requires_all_existing_prerequisites(tracking, roll, high):
   c = tc.create_tracking_trial(params(), enabled=tracking, roll_mapping_enabled=roll, high_speed_enabled=high)
   expected = (
-    'CalibratedMidUnwind' if tracking and roll and high else 'RollAwareMapping' if tracking and roll else 'BudgetedTrackingPrototype' if tracking else None
+    'EarlierUnwindOnset' if tracking and roll and high else 'RollAwareMapping' if tracking and roll else 'BudgetedTrackingPrototype' if tracking else None
   )
   assert (type(c).__name__ if c is not None else None) == expected
 
