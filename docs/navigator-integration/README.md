@@ -56,3 +56,5 @@ The longitudinal coordination candidate, MADS, automatic calibration and new smo
 See [paired integration](WHEEL_TARGET_20261018.md) for the locally integrated policy and evidence boundaries. It uses the existing high-speed opt-in and keeps the old controller as an independent reference. Device installation and road evaluation are separate.
 
 - [Bounded sustained tracking and independent-history unwind](SUSTAINED_UNWIND_20261019.md): local paired integration; validation and scope recorded with the companion evidence package.
+
+- [Calibrated tracking, bounded mid-speed correction and resolution-aware rearm](CALIBRATED_MID_REARM_20261020.md): local paired integration; preserved prerequisites and native limits, with separate controller/build and road proof.
