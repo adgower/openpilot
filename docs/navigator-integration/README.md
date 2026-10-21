@@ -62,3 +62,5 @@ See [paired integration](WHEEL_TARGET_20261018.md) for the locally integrated po
 ## Earlier bounded unwind onset — October20
 
 See [paired onset integration](EARLIER_UNWIND_ONSET_20261020.md). Local source/build proof; no device activation or physical improvement claim.
+
+Latest local upstream merge: [October 20 Autospeed/defaults and preservation notes](UPSTREAM_SYNC_20261020.md).

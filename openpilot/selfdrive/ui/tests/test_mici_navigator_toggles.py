@@ -12,6 +12,10 @@ class Widget:
     self.checked = kwargs.get('initial_state', False)
     self.callback = kwargs.get('toggle_callback')
     self._options = args[2] if len(args) > 2 else []
+    self.refresh_count = 0
+
+  def refresh(self):
+    self.refresh_count += 1
 
   def set_checked(self, checked):
     self.checked = checked
@@ -38,7 +42,8 @@ def layout():
                           CP=SimpleNamespace(brand='ford', carFingerprint='FORD_EXPEDITION_MK4', flags=1),
                           add_engaged_transition_callback=Mock(), update_params=Mock(), has_longitudinal_control=True)
   env = {'NavScroller': Nav, 'ui_state': state, 'gui_app': Mock(), 'restart_needed_callback': Mock(),
-         'BigMultiParamToggle': Widget, 'BigToggle': Widget, 'BigParamControl': Widget}
+         'BigMultiParamToggle': Widget, 'BigToggle': Widget, 'BigParamControl': Widget,
+         'InitialCruiseSpeedButton': Widget}
   exec(compile(ast.Module(body=[cls], type_ignores=[]), str(SOURCE), 'exec'), env)
   return env['TogglesLayoutMici'](), state
 
@@ -51,6 +56,8 @@ def test_controls_present_and_refresh_enabled_values():
     assert registered[key] in obj.widgets
   obj._update_toggles()
   assert all(registered[key].checked for key in KEYS)
+  assert obj._initial_cruise_speed in obj.widgets
+  assert obj._initial_cruise_speed.refresh_count == 1
 
 
 def test_callbacks_do_not_write_onroad_or_without_vehicle():
