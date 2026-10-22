@@ -66,3 +66,5 @@ See [paired onset integration](EARLIER_UNWIND_ONSET_20261020.md). Local source/b
 Latest local upstream merge: [October 20 Autospeed/defaults and preservation notes](UPSTREAM_SYNC_20261020.md).
 
 Latest bounded onset port: [earlier20–25mph correction and70–75mph onset](EARLY_LOW_HIGH_ONSET_20261022.md). Existing opt-ins/defaults and1.20/0.97 retained; no new device proof.
+
+Latest upstream refresh: [October 22 AGNOS 20 source sync and deployment boundary](UPSTREAM_SYNC_20261022.md).
