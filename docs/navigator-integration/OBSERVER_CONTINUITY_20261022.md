@@ -1,0 +1,11 @@
+# Highway observer continuity
+
+The combined persistent-tracking, roll-aware and high-speed opt-ins now select `ObserverContinuity` over the existing `EarlyLowHighOnset` policy. Existing Expedition fingerprint, pinion and low-speed flags remain required. Default-off preferences and other option combinations retain their previous routing. No new setting or automatic opt-in.
+
+The independent highway wheel observer retains valid source-ordered history across body-margin crossings; added trim still requires current confirmation from the actually selected production body observer and current/predicted wheel excess. Installed policy history/budgets remain untouched. The combined trim retains the 0.01 rad /15% cap and 0.0003 rad/frame onset, existing final slew and withdrawal guards. Added admission fades in70–71mph and out79–80mph. Low observation remains diagnostic only; this change does not add low-speed actuation or resolve23–24mph saturation.
+
+Owner mapping1.20/0.97, geometry, all previous Ford/native source, limits, calibration/motion transport and settings remain unchanged. Source is a semantic port of the frozen October22 highway candidate validated over71saved recordings/1015segments. Prototype evidence is retained by AST identity; a fresh production-factory replay of the two current target drives separately checks integration parity. Physical improvement, EPS authority and85mph stability are not established by offline checks. No OS or firmware change is included.
+
+## Fresh local verification
+
+Configured incremental minimal/full Mac and Panda builds passed. Full parent suite:1021passed/84skipped/1expected failure/281subtests; full child suite:4424passed/1690skipped/24673subtests.71new portable cases pass. Scoped Ruff/format and whitespace checks pass. Production factory replay on two current target drives/48segments/281846invocations per variant matches every frozen prototype result field, command trace and four TX stream hashes; no additional native rejection. Prior1015segment prototype corpus evidence is retained by AST identity, not a fresh integrated corpus run. Independent whole-port review found no material findings. No fresh ARM, sanitizer or device build is claimed.
