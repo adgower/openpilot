@@ -195,6 +195,11 @@ class SelfdriveD:
       self.events.add(EventName.selfdriveInitializing)
       return
 
+    from openpilot.selfdrive.car.longitudinal_context import coordination_event
+    coordination_fault = coordination_event(self.CP, self.sm['carOutput'].actuatorsOutput)
+    if coordination_fault is not None:
+      self.events.add(coordination_fault)
+
     # Check for user bookmark press
     if self.sm.updated['userBookmark']:
       prime_type = self.params.get("PrimeType")

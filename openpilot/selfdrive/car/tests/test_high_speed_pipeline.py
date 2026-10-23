@@ -70,6 +70,8 @@ def _run_pipeline(monkeypatch):
   )
   producer.valid = {'lateralManeuverPlan': False, 'vehicleParameters': True, 'carState': True}
   controls = Controls.__new__(Controls)
+  from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext
+  controls.longitudinal_context = LongitudinalContext(False)
   controls.CP = cp
   controls.sm = producer
   controls.VM = VehicleModel(cp)
@@ -77,9 +79,10 @@ def _run_pipeline(monkeypatch):
   controls.steer_limited_by_safety = False
   controls.CI = NS(get_pid_accel_limits=lambda *args: (-1.0, 1.0))
   controls.LaC = LatControlAngle(cp, controls.CI, 0.01)
-  controls.LoC = NS(long_control_state=structs.CarControl.Actuators.LongControlState.off, reset=lambda: None, update=lambda *args: 0.0)
+  controls.LoC = NS(long_control_state=structs.CarControl.Actuators.LongControlState.off, reset=lambda: None, update=lambda *args, **kwargs: 0.0)
   card = Car.__new__(Car)
   card.initialized_prev = True
+  card.longitudinal_coordination_enabled = False
   card.tracking_trial = trial
   card.tracking_motion = MotionContext()
   consumer = SM()

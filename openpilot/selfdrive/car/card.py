@@ -126,6 +126,13 @@ class Car:
           from openpilot.selfdrive.car.motion_context import MotionContext
           self.tracking_motion = MotionContext()
 
+    from opendbc.car.ford.longitudinal_coordination import coordination_available
+    self.longitudinal_coordination_enabled = bool(
+      coordination_available(self.CP) and self.params.get_bool("FordPrefLongitudinalCoordination"))
+    if self.CI.CC is not None and self.longitudinal_coordination_enabled:
+      self.CI.CC.longitudinal_coordination_enabled = True
+      self.CI.CS.enable_longitudinal_coordination(self.CI.can_parsers['pt'])
+
     self.CP.alternativeExperience = 0
     openpilot_enabled_toggle = self.params.get_bool("OpenpilotEnabledToggle")
     controller_available = self.CI.CC is not None and openpilot_enabled_toggle and not self.CP.dashcamOnly
@@ -273,6 +280,9 @@ class Car:
         from openpilot.selfdrive.car.motion_context import feed_motion_context
         feed_motion_context(self.tracking_trial, getattr(self, "tracking_motion", None), self.sm,
                             now_ns=now_nanos, state_valid=CS.canValid, replay=REPLAY)
+      if self.longitudinal_coordination_enabled:
+        from openpilot.selfdrive.car.longitudinal_context import feed_controller_context
+        feed_controller_context(self.CI.CC, control_valid=CS.canValid and self.sm.all_checks(['carControl']))
       self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos)
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
 

@@ -1,5 +1,6 @@
 import numpy as np
 from opendbc.car.structs import car
+from opendbc.car.ford.longitudinal_coordination import freeze_integral
 from openpilot.common.realtime import DT_CTRL
 from openpilot.selfdrive.controls.lib.drive_helpers import CONTROL_N
 from openpilot.common.pid import PIDController
@@ -46,8 +47,9 @@ class LongControl:
   def reset(self):
     self.pid.reset()
 
-  def update(self, active, CS, a_target, should_stop, accel_limits):
+  def update(self, active, CS, a_target, should_stop, accel_limits, *, feedback=None, now=0., epoch=0, sequence=0, coordinated=False):
     """Update longitudinal control. This updates the state machine and runs a PID loop"""
+    self.last_integral_frozen = False
     self.pid.neg_limit = accel_limits[0]
     self.pid.pos_limit = accel_limits[1]
 
@@ -67,8 +69,10 @@ class LongControl:
 
     else:  # LongCtrlState.pid
       error = a_target - CS.aEgo
+      self.last_integral_frozen = freeze_integral(now, epoch, sequence, error, a_target,
+        self.pid.i + a_target, CS.vEgo, 'pid', feedback, enabled=coordinated)
       output_accel = self.pid.update(error, speed=CS.vEgo,
-                                     feedforward=a_target)
+                                     feedforward=a_target, freeze_integrator=self.last_integral_frozen)
 
     self.last_output_accel = np.clip(output_accel, accel_limits[0], accel_limits[1])
     return self.last_output_accel

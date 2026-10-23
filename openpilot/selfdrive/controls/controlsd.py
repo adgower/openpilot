@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import math
+import os
 import time
 from numbers import Number
 
@@ -51,6 +52,11 @@ class Controls:
     self.pose_calibrator = PoseCalibrator()
     self.calibrated_pose: Pose | None = None
 
+    from opendbc.car.ford.longitudinal_coordination import coordination_available
+    from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext
+    self.longitudinal_context = LongitudinalContext(
+      coordination_available(self.CP) and self.params.get_bool("FordPrefLongitudinalCoordination"))
+    self.coordination_pose_valid = False
     self.LoC = LongControl(self.CP)
     self.VM = VehicleModel(self.CP)
     self.LaC: LatControl
@@ -66,10 +72,14 @@ class Controls:
   def update(self):
     self.sm.update(15)
     if self.sm.updated["extrinsicsCalibration"]:
+      self.coordination_pose_valid = False
       self.pose_calibrator.feed_extrinsics_calibration(self.sm['extrinsicsCalibration'])
     if self.sm.updated["deviceMotion"]:
       device_motion = Pose.from_device_motion(self.sm['deviceMotion'])
       self.calibrated_pose = self.pose_calibrator.build_calibrated_pose(device_motion)
+      dm = self.sm['deviceMotion']
+      self.coordination_pose_valid = bool(self.sm.valid['deviceMotion'] and self.sm.valid['extrinsicsCalibration']
+        and self.pose_calibrator.calib_valid and dm.orientationNED.valid and dm.sensorsOK and dm.inputsOK and dm.posenetOK)
 
   def state_control(self):
     CS = self.sm['carState']
@@ -102,6 +112,10 @@ class Controls:
                    (not standstill or self.CP.steerAtStandstill)
     CC.longActive = CC.enabled and not any(e.overrideLongitudinal for e in self.sm['onroadEvents']) and self.CP.openpilotLongitudinalControl
 
+    coordination_now_ns = self.sm.logMonoTime['carState'] if 'REPLAY' in os.environ else time.monotonic_ns()
+    if self.longitudinal_context.enabled:
+      self.longitudinal_context.prepare(CC, self.sm['carOutput'].actuatorsOutput, coordination_now_ns,
+                                       output_valid=self.sm.all_checks(['carOutput']))
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
 
@@ -117,7 +131,10 @@ class Controls:
 
     # accel PID loop
     pid_accel_limits = self.CI.get_pid_accel_limits(self.CP, CS.vEgo, CS.vCruise * CV.KPH_TO_MS)
-    actuators.accel = float(self.LoC.update(CC.longActive, CS, long_plan.aTarget, long_plan.shouldStop, pid_accel_limits))
+    actuators.accel = float(self.LoC.update(CC.longActive, CS, long_plan.aTarget, long_plan.shouldStop, pid_accel_limits,
+      feedback=self.longitudinal_context.feedback, now=coordination_now_ns / 1e9,
+      epoch=self.longitudinal_context.epoch, sequence=self.longitudinal_context.sequence,
+      coordinated=self.longitudinal_context.enabled))
 
     # Steering PID loop and lateral MPC
     # Reset desired curvature to current to avoid violating the limits on engage
@@ -167,6 +184,11 @@ class Controls:
     if self.calibrated_pose is not None:
       CC.orientationNED = self.calibrated_pose.orientation.xyz.tolist()
       CC.angularVelocity = self.calibrated_pose.angular_velocity.xyz.tolist()
+
+    from openpilot.selfdrive.car.longitudinal_context import stamp_pose
+    if self.longitudinal_context.enabled:
+      stamp_pose(CC, sample_ns=int(self.sm['deviceMotion'].timestamp),
+                 valid=self.coordination_pose_valid and self.sm.valid['extrinsicsCalibration'] and self.sm.valid['deviceMotion'])
 
     CC.cruiseControl.override = CC.enabled and not CC.longActive and self.CP.openpilotLongitudinalControl
     CC.cruiseControl.cancel = CS.cruiseState.enabled and (not CC.enabled or not self.CP.pcmCruise)
