@@ -44,6 +44,39 @@ def stamp_pose(CC, *, sample_ns, valid, reference_valid=True):
     request.referenceValid = bool(reference_valid)
 
 
+def refresh_coordination_pose(CC, sm, calibrator, primary_sm=None):
+  """Drain only pose inputs; retain source time and fail closed on unhealthy data."""
+  import math
+  from openpilot.selfdrive.locationd.helpers import Pose
+
+  sm.update(0)
+  # Independent subscribers can lag each other. Select by publication time,
+  # not source time: a newly published reversed source must still be rejected.
+  sources = {}
+  for topic in ['deviceMotion', 'extrinsicsCalibration']:
+    sources[topic] = max((source for source in (primary_sm, sm) if source is not None),
+                         key=lambda source: source.logMonoTime[topic] if source.seen[topic] else -1)
+  motion_sm, calibration_sm = sources['deviceMotion'], sources['extrinsicsCalibration']
+  if calibration_sm.seen['extrinsicsCalibration']:
+    calibrator.feed_extrinsics_calibration(calibration_sm['extrinsicsCalibration'])
+  if not (motion_sm.seen['deviceMotion'] and calibration_sm.seen['extrinsicsCalibration']):
+    stamp_pose(CC, sample_ns=0, valid=False, reference_valid=CC.navigatorLongitudinal.referenceValid)
+    return
+
+  dm = motion_sm['deviceMotion']
+  pose = calibrator.build_calibrated_pose(Pose.from_device_motion(dm))
+  orientation = pose.orientation.xyz.tolist()
+  angular_velocity = pose.angular_velocity.xyz.tolist()
+  CC.orientationNED = orientation
+  CC.angularVelocity = angular_velocity
+  # A late topic must never clear invalidity already seen by the primary producer.
+  valid = bool(CC.navigatorLongitudinal.poseValid and motion_sm.valid['deviceMotion'] and calibration_sm.valid['extrinsicsCalibration']
+    and calibrator.calib_valid and dm.orientationNED.valid and dm.sensorsOK and dm.inputsOK and dm.posenetOK
+    and 0 < dm.timestamp <= CC.navigatorLongitudinal.producerMonoTime
+    and all(math.isfinite(v) for v in orientation + angular_velocity))
+  stamp_pose(CC, sample_ns=int(dm.timestamp), valid=valid, reference_valid=CC.navigatorLongitudinal.referenceValid)
+
+
 def feed_controller_context(controller, *, control_valid):
   controller.coordination_control_valid = bool(control_valid)
 

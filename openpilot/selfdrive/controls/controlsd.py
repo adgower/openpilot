@@ -56,6 +56,9 @@ class Controls:
     from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext
     self.longitudinal_context = LongitudinalContext(
       coordination_available(self.CP) and self.params.get_bool("FordPrefLongitudinalCoordination"))
+    self.coordination_pose_sm = (messaging.SubMaster(['deviceMotion', 'extrinsicsCalibration'])
+                                 if self.longitudinal_context.enabled else None)
+    self.coordination_pose_calibrator = PoseCalibrator()
     self.coordination_pose_valid = False
     self.LoC = LongControl(self.CP)
     self.VM = VehicleModel(self.CP)
@@ -189,10 +192,12 @@ class Controls:
       CC.orientationNED = self.calibrated_pose.orientation.xyz.tolist()
       CC.angularVelocity = self.calibrated_pose.angular_velocity.xyz.tolist()
 
-    from openpilot.selfdrive.car.longitudinal_context import stamp_pose
     if self.longitudinal_context.enabled:
+      from openpilot.selfdrive.car.longitudinal_context import refresh_coordination_pose, stamp_pose
       stamp_pose(CC, sample_ns=int(self.sm['deviceMotion'].timestamp),
                  valid=self.coordination_pose_valid and self.sm.valid['extrinsicsCalibration'] and self.sm.valid['deviceMotion'])
+      if CC.longActive and CS.vEgo >= 3.0 and str(CC.actuators.longControlState) == 'pid':
+        refresh_coordination_pose(CC, self.coordination_pose_sm, self.coordination_pose_calibrator, self.sm)
 
     CC.cruiseControl.override = CC.enabled and not CC.longActive and self.CP.openpilotLongitudinalControl
     CC.cruiseControl.cancel = CS.cruiseState.enabled and (not CC.enabled or not self.CP.pcmCruise)

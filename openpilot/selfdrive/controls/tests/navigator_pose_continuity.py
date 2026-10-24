@@ -17,6 +17,10 @@ from opendbc.car.ford.values import CAR, DBC
 
 
 class Inputs(dict):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self.logMonoTime = {'deviceMotion': 990_000_000, 'extrinsicsCalibration': 990_000_000}
+
   def update(self, *_args):
     pass  # IPC alone is replaced: real update, calibration, publish and controller run.
 
@@ -40,11 +44,13 @@ class PosePipeline:
     self.sm.updated = {'deviceMotion': seen_motion, 'extrinsicsCalibration': True}
     self.sm.seen = {'deviceMotion': seen_motion, 'extrinsicsCalibration': True}
     self.sm.valid = {'deviceMotion': True, 'extrinsicsCalibration': True, 'driverAssistance': False}
-    self.sm.logMonoTime = {'longitudinalPlan': self.now, 'modelV2': self.now}
+    self.sm.logMonoTime = {'longitudinalPlan': self.now, 'modelV2': self.now, 'deviceMotion': 900_000_000, 'extrinsicsCalibration': 900_000_000}
     self.messages = {}
     c = self.controls = Controls.__new__(Controls)
     c.CP, c.sm = cp, self.sm
     c.pose_calibrator, c.calibrated_pose = PoseCalibrator(), None
+    c.coordination_pose_sm = self.sm if enabled else None
+    c.coordination_pose_calibrator = PoseCalibrator()
     c.coordination_pose_valid = False
     c.longitudinal_context = LongitudinalContext(enabled)
     c.curvature = c.desired_curvature = 0.
@@ -259,3 +265,160 @@ def test_calibration_only_engagement_through_real_card_and_parent_fault_latch(mo
   h.now += 20_000_000
   _, output = step()
   assert output.navigatorLongitudinal.valid and not output.navigatorLongitudinal.fault
+
+
+def test_late_motion_poll_repairs_exact_consumer_timing_without_restamping(monkeypatch):
+  h = PosePipeline()
+  h.now = 1_031_521_100
+  newer = log.DeviceMotion.new_message(timestamp=1_009_643_926, sensorsOK=True, inputsOK=True, posenetOK=True)
+  newer.orientationNED.valid = True
+  newer.orientationNED.y = .021
+  late = Inputs(deviceMotion=newer, extrinsicsCalibration=h.sm['extrinsicsCalibration'])
+  late.seen = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  late.updated = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  late.valid = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  h.controls.coordination_pose_sm = late
+  h.controls.coordination_pose_calibrator = PoseCalibrator()
+  cc = h.command()
+  assert cc.navigatorLongitudinal.poseMonoTime == newer.timestamp
+  assert cc.navigatorLongitudinal.producerMonoTime == h.now
+  assert cc.orientationNED[1] == pytest.approx(.031)
+  h.now = 1_054_368_056
+  from openpilot.selfdrive.car import card
+  monkeypatch.setattr(card, 'time', NS(monotonic=lambda: h.now / 1e9))
+  interface = CarInterface(h.cp)
+  interface.CC = h.controller
+  interface.CS.out = h.sm['carState']
+  interface.CS.longitudinal_brake_torque = Torque(h.now / 1e9, 0.)
+  for name in ['buttons_stock_values', 'lkas_status_stock_values', 'acc_tja_status_stock_values']:
+    setattr(interface.CS, name, defaultdict(int))
+  consumer = card.Car.__new__(card.Car)
+  consumer.CI, consumer.CP = interface, h.cp
+  consumer.sm = NS(all_alive=lambda _topics: True, all_checks=lambda _topics: True)
+  consumer.initialized_prev = True
+  consumer.tracking_trial = None
+  consumer.longitudinal_coordination_enabled = True
+  sent = []
+  consumer.pm = NS(send=lambda topic, message: sent.append((topic, message)))
+  consumer.controls_update(h.sm['carState'], cc)
+  assert not consumer.last_actuators_output.navigatorLongitudinal.fault
+  assert sent and sent[0][0] == 'sendcan'
+
+
+
+@pytest.mark.parametrize('field', ['sensorsOK', 'inputsOK', 'posenetOK', 'orientationValid', 'motionTopic', 'calibrationTopic',
+                                 'uncalibrated', 'unseen', 'future', 'stale', 'reversed'])
+def test_late_poll_does_not_hide_unhealthy_or_uncausal_input(field):
+  h = PosePipeline()
+  h.consume(h.command())
+  h.now += 20_000_000
+  late = Inputs(deviceMotion=log.DeviceMotion.new_message(timestamp=h.now - 20_000_000, sensorsOK=True, inputsOK=True, posenetOK=True),
+                extrinsicsCalibration=log.ExtrinsicsCalibration.new_message(calStatus='calibrated', rpyCalib=[0., .01, 0.]))
+  late['deviceMotion'].orientationNED.valid = True
+  late.seen = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  late.updated = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  late.valid = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  if field in ['sensorsOK', 'inputsOK', 'posenetOK']:
+    setattr(late['deviceMotion'], field, False)
+  elif field == 'orientationValid':
+    late['deviceMotion'].orientationNED.valid = False
+  elif field.endswith('Topic'):
+    late.valid['deviceMotion' if field == 'motionTopic' else 'extrinsicsCalibration'] = False
+  elif field == 'uncalibrated':
+    late['extrinsicsCalibration'].calStatus = 'uncalibrated'
+  elif field == 'unseen':
+    late.seen['deviceMotion'] = False
+  else:
+    late['deviceMotion'].timestamp = h.now + 1 if field == 'future' else h.now - 110_000_000 if field == 'stale' else 940_000_000
+  h.controls.coordination_pose_sm = late
+  h.controls.coordination_pose_calibrator = PoseCalibrator()
+  cc = h.command()
+  if field != 'unseen':
+    assert cc.navigatorLongitudinal.poseMonoTime == late['deviceMotion'].timestamp
+  output, _ = h.consume(cc)
+  assert bool(output.navigatorLongitudinal.fault) == (field != 'unseen')
+
+
+def test_late_poll_does_not_affect_installed_stop_or_creep_path():
+  h = PosePipeline()
+  h.sm['carState'].vEgo = 2.0
+  class MustNotPoll:
+    def update(self, *_args):
+      raise AssertionError('stop/creep must retain installed source')
+  h.controls.coordination_pose_sm = MustNotPoll()
+  assert h.command().navigatorLongitudinal.poseMonoTime == 950_000_000
+
+
+def test_late_subscriber_is_drained_nonblocking_before_snapshot_is_built():
+  h = PosePipeline()
+  h.now = 1_031_521_100
+  late = Inputs(h.sm)
+  late.seen, late.valid = dict(h.sm.seen), dict(h.sm.valid)
+  polls = []
+  def poll(timeout):
+    assert timeout == 0
+    polls.append(timeout)
+    newer = log.DeviceMotion.new_message(timestamp=1_009_643_926, sensorsOK=True, inputsOK=True, posenetOK=True)
+    newer.orientationNED.valid = True
+    late['deviceMotion'] = newer
+  late.update = poll
+  h.controls.coordination_pose_sm = late
+  h.controls.coordination_pose_calibrator = PoseCalibrator()
+  cc = h.command()
+  assert polls == [0]
+  assert cc.navigatorLongitudinal.poseMonoTime == 1_009_643_926
+  assert h.sm['deviceMotion'].timestamp == 950_000_000
+
+
+def test_late_healthy_snapshot_cannot_clear_invalidity_already_seen_by_main_producer():
+  h = PosePipeline()
+  h.sm['deviceMotion'].sensorsOK = False
+  late = Inputs(deviceMotion=log.DeviceMotion.new_message(timestamp=980_000_000, sensorsOK=True, inputsOK=True, posenetOK=True),
+                extrinsicsCalibration=h.sm['extrinsicsCalibration'])
+  late['deviceMotion'].orientationNED.valid = True
+  late.seen = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  late.valid = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  h.controls.coordination_pose_sm = late
+  h.controls.coordination_pose_calibrator = PoseCalibrator()
+  cc = h.command()
+  assert not cc.navigatorLongitudinal.poseValid
+  output, _ = h.consume(cc)
+  assert output.navigatorLongitudinal.fault
+
+
+def test_late_refresh_preserves_reference_withdrawal_and_command_ownership():
+  from openpilot.selfdrive.car.longitudinal_context import refresh_coordination_pose
+  h = PosePipeline()
+  cc = h.command().as_builder()
+  cc.navigatorLongitudinal.referenceValid = False
+  before = cc.to_dict()
+  refresh_coordination_pose(cc, h.sm, h.controls.coordination_pose_calibrator)
+  assert not cc.navigatorLongitudinal.referenceValid
+  for key in ['enabled', 'epoch', 'sequence', 'producerMonoTime']:
+    assert getattr(cc.navigatorLongitudinal, key) == before['navigatorLongitudinal'][key]
+  assert cc.actuators.to_dict() == before['actuators']
+
+
+@pytest.mark.parametrize('topic', ['deviceMotion', 'extrinsicsCalibration'])
+def test_lagging_dedicated_cache_cannot_roll_back_newer_primary_publication(topic):
+  h = PosePipeline()
+  h.sm['deviceMotion'].timestamp = 990_000_000
+  h.consume(h.command())
+  h.now = 1_030_000_000
+  late = Inputs(deviceMotion=log.DeviceMotion.new_message(timestamp=980_000_000, sensorsOK=True, inputsOK=True, posenetOK=True),
+                extrinsicsCalibration=log.ExtrinsicsCalibration.new_message(calStatus='calibrated', rpyCalib=[0., -.04, 0.]))
+  late['deviceMotion'].orientationNED.valid = True
+  late.seen = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  late.valid = {'deviceMotion': True, 'extrinsicsCalibration': True}
+  late.logMonoTime = {'deviceMotion': 995_000_000, 'extrinsicsCalibration': 995_000_000}
+  h.sm['deviceMotion'].timestamp = 1_010_000_000
+  h.sm.logMonoTime.update(deviceMotion=1_020_000_000, extrinsicsCalibration=1_020_000_000)
+  if topic == 'extrinsicsCalibration':
+    late['deviceMotion'].timestamp = 1_015_000_000
+    late.logMonoTime['deviceMotion'] = 1_025_000_000
+  h.controls.coordination_pose_sm = late
+  cc = h.command()
+  assert cc.navigatorLongitudinal.poseMonoTime == (1_015_000_000 if topic == 'extrinsicsCalibration' else 1_010_000_000)
+  assert cc.orientationNED[1] == pytest.approx(.01 if topic == 'extrinsicsCalibration' else .03)
+  output, _ = h.consume(cc)
+  assert not output.navigatorLongitudinal.fault
