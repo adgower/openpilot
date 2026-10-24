@@ -74,7 +74,11 @@ class Controls:
     if self.sm.updated["extrinsicsCalibration"]:
       self.coordination_pose_valid = False
       self.pose_calibrator.feed_extrinsics_calibration(self.sm['extrinsicsCalibration'])
-    if self.sm.updated["deviceMotion"]:
+    # Calibration and motion arrive independently. Rebuild the pose with a new
+    # calibration without relabeling the retained motion sample as fresh.
+    calibration_refresh = (self.longitudinal_context.enabled and self.sm.updated["extrinsicsCalibration"]
+                           and self.sm.seen["deviceMotion"])
+    if self.sm.updated["deviceMotion"] or calibration_refresh:
       device_motion = Pose.from_device_motion(self.sm['deviceMotion'])
       self.calibrated_pose = self.pose_calibrator.build_calibrated_pose(device_motion)
       dm = self.sm['deviceMotion']
