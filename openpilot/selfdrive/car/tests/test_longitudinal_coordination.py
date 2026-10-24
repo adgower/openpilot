@@ -140,6 +140,9 @@ def _run_longitudinal_pipeline(monkeypatch):
   consumer.initialized_prev = True
   consumer.tracking_trial = None
   consumer.longitudinal_coordination_enabled = True
+  from openpilot.selfdrive.car.longitudinal_pose import ConsumerPoseRefresh
+  consumer.coordination_pose_refresher = ConsumerPoseRefresh()
+  consumer.coordination_pose_sm = NS(update=lambda *_: None, seen={}, valid={}, logMonoTime={})
   sent = []
   consumer.pm = NS(send=lambda topic, message: sent.append((topic, message)))
   for _ in range(20):

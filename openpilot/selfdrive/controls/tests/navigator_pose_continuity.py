@@ -224,6 +224,9 @@ def test_calibration_only_engagement_through_real_card_and_parent_fault_latch(mo
   consumer.initialized_prev = True
   consumer.tracking_trial = None
   consumer.longitudinal_coordination_enabled = True
+  from openpilot.selfdrive.car.longitudinal_pose import ConsumerPoseRefresh
+  consumer.coordination_pose_refresher = ConsumerPoseRefresh()
+  consumer.coordination_pose_sm = h.sm
   sent = []
   consumer.pm = NS(send=lambda topic, message: sent.append((topic, message)))
 
@@ -298,6 +301,9 @@ def test_late_motion_poll_repairs_exact_consumer_timing_without_restamping(monke
   consumer.initialized_prev = True
   consumer.tracking_trial = None
   consumer.longitudinal_coordination_enabled = True
+  from openpilot.selfdrive.car.longitudinal_pose import ConsumerPoseRefresh
+  consumer.coordination_pose_refresher = ConsumerPoseRefresh()
+  consumer.coordination_pose_sm = h.sm
   sent = []
   consumer.pm = NS(send=lambda topic, message: sent.append((topic, message)))
   consumer.controls_update(h.sm['carState'], cc)

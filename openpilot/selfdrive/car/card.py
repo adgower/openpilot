@@ -129,9 +129,14 @@ class Car:
     from opendbc.car.ford.longitudinal_coordination import coordination_available
     self.longitudinal_coordination_enabled = bool(
       coordination_available(self.CP) and self.params.get_bool("FordPrefLongitudinalCoordination"))
+    self.coordination_pose_refresher = None
+    self.coordination_pose_sm = None
     if self.CI.CC is not None and self.longitudinal_coordination_enabled:
       self.CI.CC.longitudinal_coordination_enabled = True
       self.CI.CS.enable_longitudinal_coordination(self.CI.can_parsers['pt'])
+      from openpilot.selfdrive.car.longitudinal_pose import ConsumerPoseRefresh
+      self.coordination_pose_refresher = ConsumerPoseRefresh(clock_ns=None if REPLAY else time.monotonic_ns)
+      self.coordination_pose_sm = messaging.SubMaster(['deviceMotion', 'extrinsicsCalibration'])
 
     self.CP.alternativeExperience = 0
     openpilot_enabled_toggle = self.params.get_bool("OpenpilotEnabledToggle")
@@ -262,6 +267,9 @@ class Car:
     if self.sm.all_alive(['carControl']):
       # send car controls over can
       now_nanos = self.can_log_mono_time if REPLAY else int(time.monotonic() * 1e9)
+      if self.longitudinal_coordination_enabled and self.coordination_pose_refresher is not None:
+        CC = self.coordination_pose_refresher.refresh(CC, self.coordination_pose_sm, now_nanos, speed=CS.vEgo)
+        now_nanos = self.coordination_pose_refresher.apply_time_ns
       if self.tracking_trial is not None:
         from openpilot.selfdrive.car.tracking_context import feed_tracking_context
         feed_tracking_context(self.tracking_trial, now_ns=now_nanos,
