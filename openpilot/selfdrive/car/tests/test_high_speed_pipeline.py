@@ -15,6 +15,9 @@ from openpilot.selfdrive.controls.lib.latcontrol_angle import LatControlAngle
 
 
 class SM(dict):
+  def all_checks(self, topics):
+    return all(self.valid.get(topic, False) for topic in topics)
+
   def all_alive(self, topics):
     return True
 
@@ -62,9 +65,10 @@ def _run_pipeline(monkeypatch):
   producer = SM(
     carState=cs,
     vehicleParameters=lp,
-    longitudinalPlan=NS(aTarget=0.0, shouldStop=False),
+    longitudinalPlan=log.LongitudinalPlan.new_message(aTarget=0.0, shouldStop=False),
     modelV2=model,
-    selfdriveState=NS(enabled=True, active=True),
+    selfdriveState=log.SelfdriveState.new_message(enabled=True, active=True, state='enabled'),
+    driverMonitoringState=log.DriverMonitoringState.new_message(),
     onroadEvents=[],
     lateralDelay=NS(lateralDelay=0.2),
   )

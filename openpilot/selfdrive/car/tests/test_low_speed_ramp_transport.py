@@ -1,4 +1,4 @@
-"""Selected guard consumes real serialized versioned feedback."""
+"""Qualified command recovery consumes real serialized versioned feedback."""
 
 import pytest
 from opendbc.car import structs
@@ -29,9 +29,9 @@ def held(f, **change):
   return freeze_integral(**d)
 
 
-def test_real_engine_ramp_feedback_holds_only_positive_low_speed_error():
+def test_unqualified_real_engine_ramp_does_not_broadly_freeze_integral():
   f = received()
-  assert held(f)
+  assert not held(f)
   assert not held(f, error=-0.1)
   assert not held(f, target=-0.6)
   assert not held(f, now=10.2)
@@ -45,3 +45,21 @@ def test_other_peer_versions_or_modes_keep_nominal_low_speed_behavior(version, p
 def test_real_brake_and_precharge_feedback_do_not_gain_low_speed_hold():
   assert not held(received(brake=True, precharge=True, referenceBrake=True))
   assert not held(received(phase='precharge', precharge=True, referenceBrake=True, gas=-5.0, prechargeAge=0.1, budgetRemaining=0.004))
+
+
+def test_qualified_recovery_reduces_command_from_serialized_feedback():
+  from dataclasses import replace
+  from types import SimpleNamespace as NS
+  from opendbc.car.ford.longitudinal_recovery import CommandRecovery
+  recovery = CommandRecovery()
+  cs = NS(vEgo=5., aEgo=0., canValid=True, gasPressed=False, brakePressed=False, standstill=False,
+          cruiseState=NS(standstill=False))
+  f = received()
+  recovery.prepare(True, cs, 1.17, False, replace(f, t=9.975), 9.98, 7, 11, True, True, False)
+  cs.vEgo = 2.
+  braking = replace(f, t=9.985, brake=True, precharge=True, reference_brake=True, gas=-5., allocator_phase='brake')
+  recovery.prepare(True, cs, 1.17, False, braking, 9.99, 7, 12, True, True, False)
+  cs.vEgo = 1.65
+  recovery.prepare(True, cs, 1.17, False, f, 10., 7, 13, True, True, False)
+  assert recovery.apply(1.74, .01, 1.74, 'pid') == pytest.approx(1.73)
+  assert recovery.reduction == pytest.approx(.01)

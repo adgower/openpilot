@@ -1,6 +1,6 @@
 import numpy as np
 from opendbc.car.structs import car
-from opendbc.car.ford.longitudinal_coordination import freeze_integral
+from opendbc.car.ford.longitudinal_recovery import CommandRecovery
 from openpilot.common.realtime import DT_CTRL
 from openpilot.selfdrive.controls.lib.drive_helpers import CONTROL_N
 from openpilot.common.pid import PIDController
@@ -43,12 +43,17 @@ class LongControl:
     self.pid = PIDController(0.0, (CP.longitudinalTuning.kiBP, CP.longitudinalTuning.kiV),
                              rate=1 / DT_CTRL)
     self.last_output_accel = 0.0
+    self.command_recovery = CommandRecovery()
 
   def reset(self):
     self.pid.reset()
+    self.command_recovery.reset()
 
-  def update(self, active, CS, a_target, should_stop, accel_limits, *, feedback=None, now=0., epoch=0, sequence=0, coordinated=False):
+  def update(self, active, CS, a_target, should_stop, accel_limits, *, feedback=None, now=0., epoch=0, sequence=0,
+             coordinated=False, source_valid=True, urgent=False):
     """Update longitudinal control. This updates the state machine and runs a PID loop"""
+    self.command_recovery.prepare(active, CS, a_target, should_stop, feedback, now, epoch, sequence, coordinated, source_valid, urgent)
+    before_i = float(self.pid.i)
     self.last_integral_frozen = False
     self.pid.neg_limit = accel_limits[0]
     self.pid.pos_limit = accel_limits[1]
@@ -69,10 +74,12 @@ class LongControl:
 
     else:  # LongCtrlState.pid
       error = a_target - CS.aEgo
-      self.last_integral_frozen = freeze_integral(now, epoch, sequence, error, a_target,
+      self.last_integral_frozen = self.command_recovery.freeze(now, epoch, sequence, error, a_target,
         self.pid.i + a_target, CS.vEgo, 'pid', feedback, enabled=coordinated)
       output_accel = self.pid.update(error, speed=CS.vEgo,
                                      feedforward=a_target, freeze_integrator=self.last_integral_frozen)
 
+    output_accel = self.command_recovery.apply(output_accel, float(self.pid.i) - before_i, before_i + a_target,
+      'pid' if self.long_control_state == LongCtrlState.pid else 'non_pid')
     self.last_output_accel = np.clip(output_accel, accel_limits[0], accel_limits[1])
     return self.last_output_accel

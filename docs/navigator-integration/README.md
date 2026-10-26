@@ -72,3 +72,5 @@ Latest upstream refresh: [October 22 AGNOS 20 source sync and deployment boundar
 Latest local longitudinal integration: [bounded precharge entry and versioned feedback](PRECHARGE_20261026.md).
 
 - [Low-speed ramp anti-windup local integration](LOW_SPEED_RAMP_20261026.md)
+
+Latest local longitudinal port: [bounded command recovery and local-constraint anti-windup](COMMAND_RECOVERY_20261026.md), superseding the earlier uninstalled broad low-speed ramp guard. Highway pulsing remains unresolved.

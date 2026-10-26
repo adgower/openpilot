@@ -29,3 +29,7 @@ Only tests changed: a multiprocessing child creates its own messaging socket und
 ## Limits
 
 These are Mac build/test results, not an AGNOS 19.9 build or a device boot, firmware flash, Chestnut runtime, or road evaluation. The 1.20/0.97 steering implementation and child commit are unchanged. No Comma access, publication or installation occurred during this follow-up. Prior failed build/collection logs remain historical evidence and are superseded by the new validation logs.
+
+## October 26 command-recovery integration
+
+Minimal and full development Mac builds pass. Parent suite: 1,086 passed, 87 skipped, 1 expected failure, 281 passing subtests. Exact 197-segment command/producer parity passes; native evidence reused only for identical commands and unchanged safety headers/binary. Child/Panda final results are recorded in COMMAND_RECOVERY_20261026.md and companion build-results.json. No ARM, model startup or device validation performed.

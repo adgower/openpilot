@@ -143,7 +143,10 @@ class Controls:
     actuators.accel = float(self.LoC.update(CC.longActive, CS, long_plan.aTarget, long_plan.shouldStop, pid_accel_limits,
       feedback=self.longitudinal_context.feedback, now=coordination_now_ns / 1e9,
       epoch=self.longitudinal_context.epoch, sequence=self.longitudinal_context.sequence,
-      coordinated=self.longitudinal_context.enabled))
+      coordinated=self.longitudinal_context.enabled,
+      source_valid=self.sm.all_checks(['carState', 'longitudinalPlan']),
+      urgent=bool(long_plan.fcw or self.sm['driverMonitoringState'].noResponseForceDecel or
+                  self.sm['selfdriveState'].state == State.softDisabling)))
 
     # Steering PID loop and lateral MPC
     # Reset desired curvature to current to avoid violating the limits on engage

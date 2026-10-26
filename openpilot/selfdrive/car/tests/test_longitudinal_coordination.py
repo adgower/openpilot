@@ -119,8 +119,9 @@ def _run_longitudinal_pipeline(monkeypatch):
   lp = log.VehicleParameters.new_message(steerRatio=22.5, stiffnessFactor=1.)
   model = log.ModelDataV2.new_message()
   sm = SM(carState=cs, vehicleParameters=lp, modelV2=model,
-          selfdriveState=NS(enabled=True, active=True), onroadEvents=[],
-          longitudinalPlan=NS(aTarget=.3, shouldStop=False), lateralDelay=NS(lateralDelay=.2),
+          selfdriveState=log.SelfdriveState.new_message(enabled=True, active=True, state='enabled'),
+    driverMonitoringState=log.DriverMonitoringState.new_message(), onroadEvents=[],
+          longitudinalPlan=log.LongitudinalPlan.new_message(aTarget=.3, shouldStop=False), lateralDelay=NS(lateralDelay=.2),
           carOutput=NS(actuatorsOutput=structs.CarControl.Actuators()))
   sm.valid = {'lateralManeuverPlan': False, 'carOutput': True, 'vehicleParameters': True, 'carState': True, 'longitudinalPlan': True}
   sm.logMonoTime = {'carState': clock[0], 'vehicleParameters': clock[0], 'longitudinalPlan': clock[0]}

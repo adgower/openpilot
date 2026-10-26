@@ -1,6 +1,6 @@
 # Low-speed ramp anti-windup integration — 2026-10-26
 
-Local candidate only; not published or installed.
+Historical local candidate, never installed; superseded by [bounded command recovery](COMMAND_RECOVERY_20261026.md). The broad guard described below is no longer the active local paired policy.
 
 The public Ford integral-freeze policy now holds positive unattainable PID demand below 3 m/s only with fresh, valid, current-owner version-1 engineRamp feedback. Existing brake clearance, signed recovery, precharge, higher-speed behavior, 1.20/0.97 and lateral calibration remain unchanged. No post-ramp settling policy was included.
 
