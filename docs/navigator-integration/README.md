@@ -70,3 +70,5 @@ Latest bounded onset port: [earlier20–25mph correction and70–75mph onset](EA
 Latest upstream refresh: [October 22 AGNOS 20 source sync and deployment boundary](UPSTREAM_SYNC_20261022.md).
 
 Latest local longitudinal integration: [bounded precharge entry and versioned feedback](PRECHARGE_20261026.md).
+
+- [Low-speed ramp anti-windup local integration](LOW_SPEED_RAMP_20261026.md)
