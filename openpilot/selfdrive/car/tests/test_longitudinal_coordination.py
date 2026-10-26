@@ -122,8 +122,8 @@ def _run_longitudinal_pipeline(monkeypatch):
           selfdriveState=NS(enabled=True, active=True), onroadEvents=[],
           longitudinalPlan=NS(aTarget=.3, shouldStop=False), lateralDelay=NS(lateralDelay=.2),
           carOutput=NS(actuatorsOutput=structs.CarControl.Actuators()))
-  sm.valid = {'lateralManeuverPlan': False, 'carOutput': True, 'vehicleParameters': True, 'carState': True}
-  sm.logMonoTime = {'carState': clock[0], 'vehicleParameters': clock[0]}
+  sm.valid = {'lateralManeuverPlan': False, 'carOutput': True, 'vehicleParameters': True, 'carState': True, 'longitudinalPlan': True}
+  sm.logMonoTime = {'carState': clock[0], 'vehicleParameters': clock[0], 'longitudinalPlan': clock[0]}
   controls = Controls.__new__(Controls)
   controls.CP, controls.CI, controls.sm = cp, ci, sm
   controls.VM = VehicleModel(cp)
@@ -147,7 +147,7 @@ def _run_longitudinal_pipeline(monkeypatch):
   consumer.pm = NS(send=lambda topic, message: sent.append((topic, message)))
   for _ in range(20):
     clock[0] += 10_000_000
-    sm.logMonoTime = {'carState': clock[0], 'vehicleParameters': clock[0]}
+    sm.logMonoTime = {'carState': clock[0], 'vehicleParameters': clock[0], 'longitudinalPlan': clock[0]}
     ci.CS.longitudinal_brake_torque = Torque(clock[0] / 1e9, 0.)
     CC, _ = controls.state_control()
     CC.orientationNED = [0., 0., 0.]

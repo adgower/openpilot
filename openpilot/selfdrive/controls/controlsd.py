@@ -122,7 +122,9 @@ class Controls:
     coordination_now_ns = self.sm.logMonoTime['carState'] if 'REPLAY' in os.environ else time.monotonic_ns()
     if self.longitudinal_context.enabled:
       self.longitudinal_context.prepare(CC, self.sm['carOutput'].actuatorsOutput, coordination_now_ns,
-                                       output_valid=self.sm.all_checks(['carOutput']))
+                                       output_valid=self.sm.all_checks(['carOutput']),
+                                       target=float(long_plan.aTarget), target_ns=self.sm.logMonoTime['longitudinalPlan'],
+                                       target_valid=self.sm.valid['longitudinalPlan'])
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
 

@@ -1,7 +1,10 @@
 """Timestamped Navigator coordination transport and normal disengagement events."""
+import math
 import time
 
-from opendbc.car.ford.longitudinal_coordination import coordination_available, feedback_from_wire
+from opendbc.car.ford.longitudinal_coordination import coordination_available, feedback_from_wire, allocator_feedback_valid
+
+from opendbc.car.ford.longitudinal_precharge import PRECHARGE_PROTOCOL_VERSION
 
 
 class LongitudinalContext:
@@ -13,7 +16,7 @@ class LongitudinalContext:
     self.fault = False
     self.feedback = None
 
-  def prepare(self, CC, actuators_output, now_ns, *, output_valid):
+  def prepare(self, CC, actuators_output, now_ns, *, output_valid, target=None, target_ns=0, target_valid=False):
     if not self.enabled:
       return
     if not CC.enabled:
@@ -30,10 +33,23 @@ class LongitudinalContext:
     f = feedback_from_wire(actuators_output.navigatorLongitudinal)
     fresh = output_valid and f.epoch == self.epoch and 0 <= now_ns / 1e9 - f.t <= .100000001 and 0 < f.sequence <= self.sequence
     self.feedback = f if fresh else None
+    stamp_allocator_request(CC, now_ns, target=target, target_ns=target_ns, target_valid=target_valid, feedback=self.feedback)
     if CC.enabled and fresh and f.fault:
       self.fault = True
     if self.fault:
       CC.longActive = False
+
+
+def stamp_allocator_request(CC, now_ns, *, target=None, target_ns=0, target_valid=False, feedback=None):
+  """Opt in with this control's consumed target; unknown peer feedback stays nominal."""
+  request = CC.navigatorLongitudinal
+  request.allocatorVersion = PRECHARGE_PROTOCOL_VERSION
+  target_finite = target is not None and math.isfinite(target)
+  request.targetAcceleration = float(target) if target_finite else 0.
+  request.targetMonoTime = max(0, target_ns)
+  request.targetValid = bool(target_valid and target_finite and 0 < target_ns <= now_ns and now_ns - target_ns <= 100_000_000)
+  if feedback is not None and feedback.valid and not allocator_feedback_valid(feedback):
+    request.allocatorVersion = 0
 
 
 def stamp_pose(CC, *, sample_ns, valid, reference_valid=True):
