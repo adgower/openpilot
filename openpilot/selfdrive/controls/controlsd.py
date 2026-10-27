@@ -119,7 +119,11 @@ class Controls:
                    (not standstill or self.CP.steerAtStandstill)
     CC.longActive = CC.enabled and not any(e.overrideLongitudinal for e in self.sm['onroadEvents']) and self.CP.openpilotLongitudinalControl
 
-    coordination_now_ns = self.sm.logMonoTime['carState'] if 'REPLAY' in os.environ else time.monotonic_ns()
+    from openpilot.selfdrive.car.longitudinal_context import begin_coordination_cycle
+    coordination_now_ns = begin_coordination_cycle(
+      self.coordination_pose_sm if self.longitudinal_context.enabled else None,
+      replay_ns=self.sm.logMonoTime['carState'] if 'REPLAY' in os.environ else None,
+      clock_ns=time.monotonic_ns)
     if self.longitudinal_context.enabled:
       self.longitudinal_context.prepare(CC, self.sm['carOutput'].actuatorsOutput, coordination_now_ns,
                                        output_valid=self.sm.all_checks(['carOutput']),
@@ -202,7 +206,7 @@ class Controls:
       stamp_pose(CC, sample_ns=int(self.sm['deviceMotion'].timestamp),
                  valid=self.coordination_pose_valid and self.sm.valid['extrinsicsCalibration'] and self.sm.valid['deviceMotion'])
       if CC.longActive and CS.vEgo >= 3.0 and str(CC.actuators.longControlState) == 'pid':
-        refresh_coordination_pose(CC, self.coordination_pose_sm, self.coordination_pose_calibrator, self.sm)
+        refresh_coordination_pose(CC, self.coordination_pose_sm, self.coordination_pose_calibrator, self.sm, drain=False)
 
     CC.cruiseControl.override = CC.enabled and not CC.longActive and self.CP.openpilotLongitudinalControl
     CC.cruiseControl.cancel = CS.cruiseState.enabled and (not CC.enabled or not self.CP.pcmCruise)

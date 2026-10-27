@@ -131,6 +131,7 @@ def _run_longitudinal_pipeline(monkeypatch):
   controls.LoC = LongControl(cp)
   controls.LaC = LatControlAngle(cp, ci, .01)
   controls.longitudinal_context = LongitudinalContext(True)
+  controls.coordination_pose_sm = NS(update=lambda *_: None)
   controls.desired_curvature = controls.curvature = 0.
   controls.steer_limited_by_safety = False
   consumer = Car.__new__(Car)

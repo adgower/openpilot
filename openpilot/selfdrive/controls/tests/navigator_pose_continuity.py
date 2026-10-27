@@ -5,7 +5,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from openpilot.cereal import log, messaging
-from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext, coordination_event
+from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext, begin_coordination_cycle, coordination_event
 from openpilot.selfdrive.controls.controlsd import Controls
 from openpilot.selfdrive.controls.lib.longcontrol import LongControl
 from openpilot.selfdrive.locationd.helpers import PoseCalibrator
@@ -355,7 +355,7 @@ def test_late_poll_does_not_affect_installed_stop_or_creep_path():
   assert h.command().navigatorLongitudinal.poseMonoTime == 950_000_000
 
 
-def test_late_subscriber_is_drained_nonblocking_before_snapshot_is_built():
+def test_subscriber_is_drained_before_cycle_clock_and_publish_does_not_redrain():
   h = PosePipeline()
   h.now = 1_031_521_100
   late = Inputs(h.sm)
@@ -370,6 +370,7 @@ def test_late_subscriber_is_drained_nonblocking_before_snapshot_is_built():
   late.update = poll
   h.controls.coordination_pose_sm = late
   h.controls.coordination_pose_calibrator = PoseCalibrator()
+  assert begin_coordination_cycle(late, clock_ns=lambda: h.now) == h.now
   cc = h.command()
   assert polls == [0]
   assert cc.navigatorLongitudinal.poseMonoTime == 1_009_643_926

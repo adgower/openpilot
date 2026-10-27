@@ -1,6 +1,7 @@
 """Real paired precharge schema and producer/consumer contract."""
 
 from opendbc.car import structs
+from opendbc.car.ford.longitudinal_precharge import PRECHARGE_PROTOCOL_VERSION
 from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext
 
 
@@ -9,7 +10,7 @@ def test_consumed_target_is_stamped_and_roundtrips_without_latest_topic_join():
   cc = structs.CarControl(enabled=True, longActive=True)
   context.prepare(cc, structs.CarControl.Actuators(), 1_000_000_000, output_valid=False, target=0.125, target_ns=980_000_000, target_valid=True)
   with structs.CarControl.from_bytes(cc.to_bytes()) as wire:
-    assert wire.navigatorLongitudinal.allocatorVersion == 1
+    assert wire.navigatorLongitudinal.allocatorVersion == PRECHARGE_PROTOCOL_VERSION
     assert wire.navigatorLongitudinal.targetValid
     assert wire.navigatorLongitudinal.targetAcceleration == 0.125
     assert wire.navigatorLongitudinal.targetMonoTime == 980_000_000
@@ -42,7 +43,9 @@ def test_missing_or_stale_target_cannot_opt_into_precharge():
 
 
 def test_older_future_or_malformed_peer_metadata_selects_nominal_without_fault():
-  for version, phase, age in [(0, 'inactive', 0.0), (2, 'inactive', 0.0), (1, 99, 0.0), (1, 'precharge', float('nan'))]:
+  cases = [(0, 'inactive', 0.0), (1, 'inactive', 0.0), (2, 'inactive', 0.0),
+           (PRECHARGE_PROTOCOL_VERSION, 99, 0.0), (PRECHARGE_PROTOCOL_VERSION, 'precharge', float('nan'))]
+  for version, phase, age in cases:
     context = LongitudinalContext(True)
     cc = structs.CarControl(enabled=True, longActive=True)
     output = structs.CarControl.Actuators()

@@ -5,6 +5,7 @@ from types import SimpleNamespace as NS
 import pytest
 from openpilot.selfdrive.controls.lib.longcontrol import LongControl
 from opendbc.car.ford.longitudinal_coordination import Feedback
+from opendbc.car.ford.longitudinal_precharge import PRECHARGE_PROTOCOL_VERSION
 
 
 def controller(monkeypatch):
@@ -38,7 +39,7 @@ class Stream:
       limited,
       True,
       False,
-      allocator_version=1,
+      allocator_version=PRECHARGE_PROTOCOL_VERSION,
       precharge=brake,
       reference_brake=brake,
       allocator_phase=phase,

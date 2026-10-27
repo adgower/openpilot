@@ -60,12 +60,20 @@ def stamp_pose(CC, *, sample_ns, valid, reference_valid=True):
     request.referenceValid = bool(reference_valid)
 
 
-def refresh_coordination_pose(CC, sm, calibrator, primary_sm=None):
+def begin_coordination_cycle(pose_sm, *, replay_ns=None, clock_ns=None):
+  """Freeze pose subscriptions before sampling this control's common clock."""
+  if pose_sm is not None:
+    pose_sm.update(0)
+  return replay_ns if replay_ns is not None else (clock_ns or time.monotonic_ns)()
+
+
+def refresh_coordination_pose(CC, sm, calibrator, primary_sm=None, *, drain=True):
   """Drain only pose inputs; retain source time and fail closed on unhealthy data."""
   import math
   from openpilot.selfdrive.locationd.helpers import Pose
 
-  sm.update(0)
+  if drain:
+    sm.update(0)
   # Independent subscribers can lag each other. Select by publication time,
   # not source time: a newly published reversed source must still be rejected.
   sources = {}

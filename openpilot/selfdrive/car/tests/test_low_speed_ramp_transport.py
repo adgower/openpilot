@@ -3,9 +3,10 @@
 import pytest
 from opendbc.car import structs
 from opendbc.car.ford.longitudinal_coordination import feedback_from_wire, freeze_integral
+from opendbc.car.ford.longitudinal_precharge import PRECHARGE_PROTOCOL_VERSION
 
 
-def received(version=1, phase='engineRamp', **changes):
+def received(version=PRECHARGE_PROTOCOL_VERSION, phase='engineRamp', **changes):
   output = structs.CarControl.Actuators()
   f = output.navigatorLongitudinal
   f.producerMonoTime = 10_000_000_000
@@ -37,7 +38,9 @@ def test_unqualified_real_engine_ramp_does_not_broadly_freeze_integral():
   assert not held(f, now=10.2)
 
 
-@pytest.mark.parametrize('version,phase', [(0, 'engineRamp'), (2, 'engineRamp'), (1, 'drive'), (1, 'release'), (1, 99)])
+@pytest.mark.parametrize('version,phase', [(0, 'engineRamp'), (1, 'engineRamp'), (2, 'engineRamp'),
+                                          (PRECHARGE_PROTOCOL_VERSION, 'drive'), (PRECHARGE_PROTOCOL_VERSION, 'release'),
+                                          (PRECHARGE_PROTOCOL_VERSION, 99)])
 def test_other_peer_versions_or_modes_keep_nominal_low_speed_behavior(version, phase):
   assert not held(received(version, phase))
 
@@ -63,3 +66,22 @@ def test_qualified_recovery_reduces_command_from_serialized_feedback():
   recovery.prepare(True, cs, 1.17, False, f, 10., 7, 13, True, True, False)
   assert recovery.apply(1.74, .01, 1.74, 'pid') == pytest.approx(1.73)
   assert recovery.reduction == pytest.approx(.01)
+
+
+@pytest.mark.parametrize('version', [0, 1, 2])
+def test_legacy_feedback_cannot_admit_current_command_recovery(version):
+  from dataclasses import replace
+  from types import SimpleNamespace as NS
+  from opendbc.car.ford.longitudinal_recovery import CommandRecovery
+  recovery = CommandRecovery()
+  cs = NS(vEgo=5., aEgo=0., canValid=True, gasPressed=False, brakePressed=False, standstill=False,
+          cruiseState=NS(standstill=False))
+  f = received(version=version)
+  recovery.prepare(True, cs, 1.17, False, replace(f, t=9.975), 9.98, 7, 11, True, True, False)
+  cs.vEgo = 2.
+  braking = replace(f, t=9.985, brake=True, precharge=True, reference_brake=True, gas=-5., allocator_phase='brake')
+  recovery.prepare(True, cs, 1.17, False, braking, 9.99, 7, 12, True, True, False)
+  cs.vEgo = 1.65
+  recovery.prepare(True, cs, 1.17, False, f, 10., 7, 13, True, True, False)
+  assert recovery.apply(1.74, .01, 1.74, 'pid') == pytest.approx(1.74)
+  assert not recovery.valid and recovery.reduction == 0.
