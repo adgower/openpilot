@@ -64,6 +64,10 @@ class Car:
   CP: car.CarParams
 
   def __init__(self, CI=None, RI=None) -> None:
+    live_hardware = CI is None and not REPLAY
+    self.prediction_pilot = None
+    self.pilot_state_ns = 0
+    self.pilot_state_valid = False
     self.can_sock = messaging.sub_sock('can', timeout=20)
     self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents', 'modelV2', 'deviceMotion', 'extrinsicsCalibration'])
     self.pm = messaging.PubMaster(['sendcan', 'carState', 'carParams', 'carOutput', 'radarTracks'])
@@ -138,6 +142,14 @@ class Car:
       self.coordination_pose_refresher = ConsumerPoseRefresh(clock_ns=None if REPLAY else time.monotonic_ns)
       self.coordination_pose_sm = messaging.SubMaster(['deviceMotion', 'extrinsicsCalibration'])
 
+    if live_hardware and self.CI.CC is not None and self.longitudinal_coordination_enabled:
+      from openpilot.selfdrive.car.prediction_pilot import create_prediction_pilot
+      try:
+        self.prediction_pilot = create_prediction_pilot(self.params, self.CP)
+        self.CI.CC.prediction_pilot = self.prediction_pilot
+      except Exception:
+        cloudlog.exception("Prediction pilot unavailable; preserving baseline controller")
+
     self.CP.alternativeExperience = 0
     openpilot_enabled_toggle = self.params.get_bool("OpenpilotEnabledToggle")
     controller_available = self.CI.CC is not None and openpilot_enabled_toggle and not self.CP.dashcamOnly
@@ -202,6 +214,9 @@ class Car:
     self.sm.update(0)
 
     can_rcv_valid = len(can_strs) > 0
+    self.pilot_state_valid = bool(can_rcv_valid and CS.canValid)
+    if can_rcv_valid:
+      self.pilot_state_ns = messaging.log_from_bytes(can_strs[-1]).logMonoTime
     if self.tracking_trial is not None and can_rcv_valid:
       self.tracking_state_ns = messaging.log_from_bytes(can_strs[-1]).logMonoTime
 
@@ -291,6 +306,8 @@ class Car:
       if self.longitudinal_coordination_enabled:
         from openpilot.selfdrive.car.longitudinal_context import feed_controller_context
         feed_controller_context(self.CI.CC, control_valid=CS.canValid and self.sm.all_checks(['carControl']))
+      if getattr(self, 'prediction_pilot', None) is not None:
+        self.prediction_pilot.feed(state_ns=self.pilot_state_ns, state_valid=self.pilot_state_valid)
       self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos)
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
 
@@ -326,6 +343,8 @@ class Car:
     finally:
       e.set()
       t.join()
+      if self.prediction_pilot is not None:
+        self.prediction_pilot.worker.stop.set()
 
 
 def main():
