@@ -120,8 +120,11 @@ def _run_pipeline(monkeypatch):
     consumer.recv_time = {'deviceMotion': (now - 3_000_000) / 1e9, 'extrinsicsCalibration': (now - 3_000_000) / 1e9}
     card.tracking_state_ns = now - 1_000_000
     card.controls_update(cs, cc)
+  assert trial.input_state_valid
+  assert trial.evidence(cc, NS(out=cs), cc.actuators) is not None
   assert trial.reduction > 0 and trial.body_reason == 'confirmed'
-  assert trial.motion[2] > consumer.logMonoTime['deviceMotion']
+  assert trial.motion['received_ns'] > consumer.logMonoTime['deviceMotion']
+  assert trial.reference.motion[2] == trial.motion['received_ns']
   assert set(sent) == {'sendcan'}  # capture function only, never an actual endpoint
   # No new motion message: invalidate calibration and immediately withdraw.
   clock[0] += 50_000_000
@@ -135,4 +138,4 @@ def _run_pipeline(monkeypatch):
   consumer.recv_time['extrinsicsCalibration'] = (now - 3_000_000) / 1e9
   card.tracking_state_ns = now - 1_000_000
   card.controls_update(cs, cc)
-  assert trial.reduction == 0 and trial.final_residual == 0
+  assert trial.reduction == 0 and trial.final_residual == 0 and trial.term == 0
