@@ -17,7 +17,7 @@ def create_tracking_trial(CP, *, enabled, roll_mapping_enabled=False, high_speed
   if roll_mapping_enabled and high_speed_enabled:
     from opendbc.car.ford.lateral_angle_unwind_allocation import create_tracking_trial as create_admitted_trial
 
-    return create_admitted_trial(CP, enabled=True)
+    return create_admitted_trial(CP, enabled=True, curve_scope_enabled=True)
   if roll_mapping_enabled:
     from opendbc.car.ford.lateral_angle_roll_mapping import RollAwareMapping
 
