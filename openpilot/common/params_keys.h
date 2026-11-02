@@ -37,6 +37,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"FordPrefRollAwareMapping", {PERSISTENT, BOOL, "0"}},
     {"FordPrefPersistentTracking", {PERSISTENT, BOOL, "0"}},
     {"FordPrefLongitudinalCoordination", {PERSISTENT, BOOL, "0"}},
+    {"NavigatorPredictionPilotEnabled", {CLEAR_ON_MANAGER_START | CLEAR_ON_OFFROAD_TRANSITION | DONT_LOG, BOOL, "0"}},
     {"NavigatorPredictionPilotPermit", {CLEAR_ON_MANAGER_START | DONT_LOG, STRING}},
     {"NavigatorPredictionPilotCancel", {CLEAR_ON_MANAGER_START | DONT_LOG, STRING}},
     {"NavigatorPredictionPilotStatus", {CLEAR_ON_MANAGER_START | DONT_LOG, STRING}},

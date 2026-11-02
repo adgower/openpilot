@@ -1,4 +1,4 @@
-"""Session-bound prediction pilot. All filesystem/Params work is off the control thread."""
+"""Session-bound prediction pilot; recurring I/O runs on a background worker."""
 
 from dataclasses import asdict
 import hashlib
@@ -16,6 +16,7 @@ from opendbc.car.ford.values import CAR
 PERMIT = 'NavigatorPredictionPilotPermit'
 CANCEL = 'NavigatorPredictionPilotCancel'
 STATUS = 'NavigatorPredictionPilotStatus'
+ENABLE = 'NavigatorPredictionPilotEnabled'
 
 
 class PermitBroker:
@@ -98,17 +99,24 @@ class PilotWorker:
       self.snapshot = dict(self.snapshot, audit=False, healthy=False)
 
   def run(self):
-    import openpilot.cereal.messaging as messaging
-
-    topics = ['selfdriveState', 'pandaStates', 'onroadEvents']
-    sockets = {name: messaging.sub_sock(name) for name in topics}
-    latest, seen = {}, {}
-    last_raw = {PERMIT: None, CANCEL: None}
-    source_ok = True
-    last_hash = 0
-    last_params = 0
-    last_status = 0
     try:
+      from openpilot.common.realtime import drop_realtime, set_core_affinity
+
+      # Threads inherit card's FIFO priority and core affinity. Do this on the
+      # worker itself, before IPC or recurring I/O, never on the control thread.
+      drop_realtime()
+      set_core_affinity([0, 1, 2, 3])
+
+      import openpilot.cereal.messaging as messaging
+
+      topics = ['selfdriveState', 'pandaStates', 'onroadEvents']
+      sockets = {name: messaging.sub_sock(name) for name in topics}
+      latest, seen = {}, {}
+      last_raw = {PERMIT: None, CANCEL: None}
+      source_ok = True
+      last_hash = 0
+      last_params = 0
+      last_status = 0
       self.log_dir.mkdir(parents=True, exist_ok=True)
       with (self.log_dir / (self.session_id + '.jsonl')).open('x') as stream:
         stream.write(json.dumps({'event': 'session', 'session_id': self.session_id, 'source_id': self.source_id, 'binding': self.binding}) + '\n')
@@ -345,6 +353,11 @@ class PredictionPilot:
 
 
 def create_prediction_pilot(params, cp):
+  # Normal Alpha needs no test worker, source hashing, audit or status writer.
+  # Availability is an explicit offroad opt-in, separate from permission to arm.
+  if not params.get_bool(ENABLE):
+    return None
+
   from openpilot.common.hardware.hw import Paths
   from opendbc.car.ford import carcontroller, prediction_pilot, longitudinal_recovery
   from openpilot.selfdrive.controls.lib import longcontrol
