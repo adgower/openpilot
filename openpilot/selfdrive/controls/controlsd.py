@@ -53,14 +53,15 @@ class Controls:
     self.calibrated_pose: Pose | None = None
 
     from opendbc.car.ford.longitudinal_coordination import coordination_available
-    from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext
-    self.longitudinal_context = LongitudinalContext(
-      coordination_available(self.CP) and self.params.get_bool("FordPrefLongitudinalCoordination"))
+    from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext, retention_startup_enabled
+    coordination_enabled = bool(coordination_available(self.CP) and self.params.get_bool("FordPrefLongitudinalCoordination"))
+    self.retention_enabled = retention_startup_enabled(supported=coordination_enabled)
+    self.longitudinal_context = LongitudinalContext(coordination_enabled, retention_enabled=self.retention_enabled)
     self.coordination_pose_sm = (messaging.SubMaster(['deviceMotion', 'extrinsicsCalibration'])
                                  if self.longitudinal_context.enabled else None)
     self.coordination_pose_calibrator = PoseCalibrator()
     self.coordination_pose_valid = False
-    self.LoC = LongControl(self.CP)
+    self.LoC = LongControl(self.CP, retention_enabled=self.retention_enabled)
     self.VM = VehicleModel(self.CP)
     self.LaC: LatControl
     if self.CP.steerControlType == car.CarParams.SteerControlType.angle:

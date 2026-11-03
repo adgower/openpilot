@@ -142,6 +142,8 @@ def _run_longitudinal_pipeline(monkeypatch):
   consumer.initialized_prev = True
   consumer.tracking_trial = None
   consumer.longitudinal_coordination_enabled = True
+  consumer.pilot_state_ns = 0
+  consumer.pilot_state_valid = False
   from openpilot.selfdrive.car.longitudinal_pose import ConsumerPoseRefresh
   consumer.coordination_pose_refresher = ConsumerPoseRefresh()
   consumer.coordination_pose_sm = NS(update=lambda *_: None, seen={}, valid={}, logMonoTime={})
@@ -156,6 +158,8 @@ def _run_longitudinal_pipeline(monkeypatch):
     stamp_pose(CC, sample_ns=clock[0], valid=True)
     # Real wire boundary, not sharing a mutable builder across processes.
     with structs.CarControl.from_bytes(CC.to_bytes()) as wire:
+      consumer.pilot_state_ns = clock[0]
+      consumer.pilot_state_valid = True
       consumer.controls_update(cs, wire)
     sm['carOutput'].actuatorsOutput = consumer.last_actuators_output
   f = consumer.last_actuators_output.navigatorLongitudinal
@@ -170,6 +174,8 @@ def _run_longitudinal_pipeline(monkeypatch):
     CC, _ = controls.state_control()
     CC.orientationNED = [0., 0., 0.]
     stamp_pose(CC, sample_ns=clock[0], valid=True)
+    consumer.pilot_state_ns = clock[0]
+    consumer.pilot_state_valid = True
     consumer.controls_update(cs, CC.as_reader())
   sm['longitudinalPlan'].aTarget = .7
   ci.CS.longitudinal_brake_torque = None
@@ -178,6 +184,8 @@ def _run_longitudinal_pipeline(monkeypatch):
     CC, _ = controls.state_control()
     CC.orientationNED = [0., 0., 0.]
     stamp_pose(CC, sample_ns=clock[0], valid=True)
+    consumer.pilot_state_ns = clock[0]
+    consumer.pilot_state_valid = True
     consumer.controls_update(cs, CC.as_reader())
     sm['carOutput'].actuatorsOutput = consumer.last_actuators_output
   assert consumer.last_actuators_output.navigatorLongitudinal.fault

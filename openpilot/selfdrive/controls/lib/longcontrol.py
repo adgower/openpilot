@@ -37,13 +37,13 @@ def long_control_state_trans(active, long_control_state, should_stop, brake_pres
   return long_control_state
 
 class LongControl:
-  def __init__(self, CP):
+  def __init__(self, CP, *, retention_enabled=False):
     self.CP = CP
     self.long_control_state = LongCtrlState.off
     self.pid = PIDController(0.0, (CP.longitudinalTuning.kiBP, CP.longitudinalTuning.kiV),
                              rate=1 / DT_CTRL)
     self.last_output_accel = 0.0
-    self.command_recovery = CommandRecovery()
+    self.command_recovery = CommandRecovery(retention_enabled=retention_enabled)
 
   def reset(self):
     self.pid.reset()

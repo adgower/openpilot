@@ -137,6 +137,11 @@ class Car:
     self.coordination_pose_sm = None
     if self.CI.CC is not None and self.longitudinal_coordination_enabled:
       self.CI.CC.longitudinal_coordination_enabled = True
+      from openpilot.selfdrive.car.longitudinal_context import retention_startup_enabled, history_release_startup_enabled
+      self.CI.CC.configure_retention(enabled=retention_startup_enabled(supported=True))
+      configure_history_release = getattr(self.CI.CC, "configure_history_release", None)
+      if callable(configure_history_release):
+        configure_history_release(enabled=history_release_startup_enabled(supported=True))
       self.CI.CS.enable_longitudinal_coordination(self.CI.can_parsers['pt'])
       from openpilot.selfdrive.car.longitudinal_pose import ConsumerPoseRefresh
       self.coordination_pose_refresher = ConsumerPoseRefresh(clock_ns=None if REPLAY else time.monotonic_ns)
@@ -305,8 +310,10 @@ class Car:
         feed_motion_context(self.tracking_trial, getattr(self, "tracking_motion", None), self.sm,
                             now_ns=now_nanos, state_valid=CS.canValid, replay=REPLAY)
       if self.longitudinal_coordination_enabled:
-        from openpilot.selfdrive.car.longitudinal_context import feed_controller_context
-        feed_controller_context(self.CI.CC, control_valid=CS.canValid and self.sm.all_checks(['carControl']))
+        from openpilot.selfdrive.car.longitudinal_context import feed_controller_context, speed_sample_ns
+        feed_controller_context(self.CI.CC, control_valid=CS.canValid and self.sm.all_checks(['carControl']),
+                                state_ns=self.pilot_state_ns, state_valid=self.pilot_state_valid,
+                                speed_ns=speed_sample_ns(self.CI.can_parsers['pt']))
       if getattr(self, 'prediction_pilot', None) is not None:
         self.prediction_pilot.feed(state_ns=self.pilot_state_ns, state_valid=self.pilot_state_valid)
       self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos)

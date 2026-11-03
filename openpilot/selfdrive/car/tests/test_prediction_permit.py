@@ -374,7 +374,7 @@ def test_actual_card_feeds_source_timestamp_before_controller(monkeypatch):
     prediction_pilot=runtime,
     pilot_state_ns=now - 10_000_000,
     pilot_state_valid=True,
-    CI=NS(CC=c, apply=apply),
+    CI=NS(CC=c, apply=apply, can_parsers={"pt": NS(ts_nanos={"BrakeSysFeatures": {"Veh_V_ActlBrk": now - 10_000_000}})}),
     can_log_mono_time=now,
     pm=NS(send=lambda *a: None),
   )

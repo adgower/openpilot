@@ -1,6 +1,9 @@
 """Timestamped Navigator coordination transport and normal disengagement events."""
 import math
 import time
+import os
+
+from opendbc.car.ford.longitudinal_retention import REQUEST_VERSION, speed_sample_ns as speed_sample_ns
 
 from opendbc.car.ford.longitudinal_coordination import coordination_available, feedback_from_wire, allocator_feedback_valid
 
@@ -8,8 +11,9 @@ from opendbc.car.ford.longitudinal_precharge import PRECHARGE_PROTOCOL_VERSION
 
 
 class LongitudinalContext:
-  def __init__(self, enabled=False):
+  def __init__(self, enabled=False, *, retention_enabled=False):
     self.enabled = enabled
+    self.retention_enabled = bool(enabled and retention_enabled)
     self.epoch = time.monotonic_ns()
     self.sequence = 0
     self.owner = False
@@ -33,17 +37,19 @@ class LongitudinalContext:
     f = feedback_from_wire(actuators_output.navigatorLongitudinal)
     fresh = output_valid and f.epoch == self.epoch and 0 <= now_ns / 1e9 - f.t <= .100000001 and 0 < f.sequence <= self.sequence
     self.feedback = f if fresh else None
-    stamp_allocator_request(CC, now_ns, target=target, target_ns=target_ns, target_valid=target_valid, feedback=self.feedback)
+    stamp_allocator_request(CC, now_ns, target=target, target_ns=target_ns, target_valid=target_valid,
+                            feedback=self.feedback, retention_enabled=self.retention_enabled)
     if CC.enabled and fresh and f.fault:
       self.fault = True
     if self.fault:
       CC.longActive = False
 
 
-def stamp_allocator_request(CC, now_ns, *, target=None, target_ns=0, target_valid=False, feedback=None):
+def stamp_allocator_request(CC, now_ns, *, target=None, target_ns=0, target_valid=False, feedback=None, retention_enabled=False):
   """Opt in with this control's consumed target; unknown peer feedback stays nominal."""
   request = CC.navigatorLongitudinal
   request.allocatorVersion = PRECHARGE_PROTOCOL_VERSION
+  request.retentionVersion = REQUEST_VERSION if retention_enabled else 0
   target_finite = target is not None and math.isfinite(target)
   request.targetAcceleration = float(target) if target_finite else 0.
   request.targetMonoTime = max(0, target_ns)
@@ -101,8 +107,21 @@ def refresh_coordination_pose(CC, sm, calibrator, primary_sm=None, *, drain=True
   stamp_pose(CC, sample_ns=int(dm.timestamp), valid=valid, reference_valid=CC.navigatorLongitudinal.referenceValid)
 
 
-def feed_controller_context(controller, *, control_valid):
+def retention_startup_enabled(*, supported=False, environ=None):
+  """Explicit developer launch selection, read once by each process; unset is OFF."""
+  return bool(supported and (os.environ if environ is None else environ).get('NAVIGATOR_RECEIPT_RETENTION') == '1')
+
+
+def history_release_startup_enabled(*, supported=False, environ=None):
+  """Explicit developer launch selection, read once by card; unset is OFF."""
+  return bool(supported and (os.environ if environ is None else environ).get('NAVIGATOR_HISTORY_RELEASE') == '1')
+
+
+def feed_controller_context(controller, *, control_valid, state_ns=0, state_valid=False, speed_ns=0):
   controller.coordination_control_valid = bool(control_valid)
+  controller.coordination_state_ns = state_ns if isinstance(state_ns, int) and 0 < state_ns < 2**64 else 0
+  controller.coordination_speed_ns = speed_ns if isinstance(speed_ns, int) and 0 < speed_ns < 2**64 else 0
+  controller.coordination_state_valid = bool(state_valid and controller.coordination_state_ns and controller.coordination_speed_ns)
 
 
 def coordination_event(CP, actuators_output):
