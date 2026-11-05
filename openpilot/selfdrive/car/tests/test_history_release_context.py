@@ -25,17 +25,22 @@ def test_history_release_startup_supported_and_independent():
     supported=True, environ={'NAVIGATOR_RECEIPT_RETENTION': '1'})
 
 
-def construct_car(monkeypatch, *, coordination=True, alpha=True, old_child=False):
+def construct_car(monkeypatch, *, coordination=True, alpha=True, old_child=False, reference_hook=True):
   monkeypatch.setattr(card, 'REPLAY', True)
   monkeypatch.setattr(card.messaging, 'SubMaster', lambda topics: NS(services=topics))
   monkeypatch.setattr(card.messaging, 'sub_sock', lambda *args, **kwargs: None)
   monkeypatch.setattr(card.messaging, 'PubMaster', lambda *args, **kwargs: NS(sock={'sendcan': None}))
   params = Params()
-  params.put_bool('FordPrefLongitudinalCoordination', coordination)
-  params.put_bool('OpenpilotEnabledToggle', True)
+  # Startup reads a separate Params handle; finish fixture persistence first.
+  params.put_bool('FordPrefLongitudinalCoordination', coordination, block=True)
+  params.put_bool('OpenpilotEnabledToggle', True, block=True)
+  assert Params().get_bool('FordPrefLongitudinalCoordination') == coordination
+  assert Params().get_bool('OpenpilotEnabledToggle')
   cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
   cp.openpilotLongitudinalControl = alpha
   ci = CarInterface(cp)
+  if not reference_hook:
+    monkeypatch.delattr(type(ci.CC), "configure_coast_reference")
   calls = []
   ci.CC.configure_history_release = None if old_child else lambda *, enabled=False: calls.append(enabled)
   return card.Car(CI=ci, RI=NS()), calls
@@ -74,3 +79,17 @@ def test_old_child_without_history_api_stays_compatible(monkeypatch):
     c, calls = construct_car(monkeypatch, old_child=True)
     assert calls == []
     assert c.CI.CC.configure_history_release is None
+
+
+@pytest.mark.parametrize('reference_enabled', [False, True])
+def test_old_child_without_reference_hook(monkeypatch, reference_enabled):
+  monkeypatch.setenv('NAVIGATOR_COAST_REFERENCE', '1' if reference_enabled else '0')
+  monkeypatch.delenv('NAVIGATOR_RECEIPT_RETENTION', raising=False)
+  with OpenpilotPrefix():
+    if reference_enabled:
+      with pytest.raises(ValueError, match="paired consumer"):
+        construct_car(monkeypatch, reference_hook=False)
+    else:
+      c, calls = construct_car(monkeypatch, reference_hook=False)
+      assert c.longitudinal_coordination_enabled
+      assert calls == [False]

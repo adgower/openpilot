@@ -53,15 +53,17 @@ class Controls:
     self.calibrated_pose: Pose | None = None
 
     from opendbc.car.ford.longitudinal_coordination import coordination_available
-    from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext, retention_startup_enabled
+    from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext, retention_startup_enabled, coast_reference_startup_enabled
     coordination_enabled = bool(coordination_available(self.CP) and self.params.get_bool("FordPrefLongitudinalCoordination"))
     self.retention_enabled = retention_startup_enabled(supported=coordination_enabled)
-    self.longitudinal_context = LongitudinalContext(coordination_enabled, retention_enabled=self.retention_enabled)
+    self.reference_enabled = coast_reference_startup_enabled(supported=coordination_enabled)
+    self.longitudinal_context = LongitudinalContext(coordination_enabled, retention_enabled=self.retention_enabled,
+                                                     reference_enabled=self.reference_enabled)
     self.coordination_pose_sm = (messaging.SubMaster(['deviceMotion', 'extrinsicsCalibration'])
                                  if self.longitudinal_context.enabled else None)
     self.coordination_pose_calibrator = PoseCalibrator()
     self.coordination_pose_valid = False
-    self.LoC = LongControl(self.CP, retention_enabled=self.retention_enabled)
+    self.LoC = LongControl(self.CP, retention_enabled=self.retention_enabled, reference_enabled=self.reference_enabled)
     self.VM = VehicleModel(self.CP)
     self.LaC: LatControl
     if self.CP.steerControlType == car.CarParams.SteerControlType.angle:
@@ -143,12 +145,30 @@ class Controls:
     if not CC.longActive:
       self.LoC.reset()
 
+    reference_context = None
+    if getattr(self, 'reference_enabled', False):
+      from openpilot.selfdrive.car.longitudinal_context import refresh_coordination_pose, stamp_pose
+      from opendbc.car.ford.longitudinal_reference_feedback import make_reference_context
+      if self.calibrated_pose is not None:
+        CC.orientationNED = self.calibrated_pose.orientation.xyz.tolist()
+        CC.angularVelocity = self.calibrated_pose.angular_velocity.xyz.tolist()
+      stamp_pose(CC, sample_ns=int(self.sm['deviceMotion'].timestamp),
+                 valid=self.coordination_pose_valid and self.sm.valid['extrinsicsCalibration'] and self.sm.valid['deviceMotion'])
+      if CC.longActive and CS.vEgo >= 3.0:
+        refresh_coordination_pose(CC, self.coordination_pose_sm, self.coordination_pose_calibrator, self.sm, drain=False)
+      reference_context = make_reference_context(CC, CS, coordination_now_ns,
+        source_valid=self.sm.all_checks(['carState', 'longitudinalPlan']),
+        urgent=bool(long_plan.fcw or self.sm['driverMonitoringState'].noResponseForceDecel or
+                    self.sm['selfdriveState'].state == State.softDisabling))
+
     # accel PID loop
     pid_accel_limits = self.CI.get_pid_accel_limits(self.CP, CS.vEgo, CS.vCruise * CV.KPH_TO_MS)
     actuators.accel = float(self.LoC.update(CC.longActive, CS, long_plan.aTarget, long_plan.shouldStop, pid_accel_limits,
       feedback=self.longitudinal_context.feedback, now=coordination_now_ns / 1e9,
       epoch=self.longitudinal_context.epoch, sequence=self.longitudinal_context.sequence,
       coordinated=self.longitudinal_context.enabled,
+      **({'reference_context': reference_context, 'target_ns': self.sm.logMonoTime['longitudinalPlan']}
+         if getattr(self, 'reference_enabled', False) else {}),
       source_valid=self.sm.all_checks(['carState', 'longitudinalPlan']),
       urgent=bool(long_plan.fcw or self.sm['driverMonitoringState'].noResponseForceDecel or
                   self.sm['selfdriveState'].state == State.softDisabling)))
@@ -198,11 +218,11 @@ class Controls:
     # Orientation and angle rates can be useful for carcontroller
     # Only calibrated (car) frame is relevant for the carcontroller
     CC.currentCurvature = self.curvature
-    if self.calibrated_pose is not None:
+    if not getattr(self, 'reference_enabled', False) and self.calibrated_pose is not None:
       CC.orientationNED = self.calibrated_pose.orientation.xyz.tolist()
       CC.angularVelocity = self.calibrated_pose.angular_velocity.xyz.tolist()
 
-    if self.longitudinal_context.enabled:
+    if self.longitudinal_context.enabled and not getattr(self, 'reference_enabled', False):
       from openpilot.selfdrive.car.longitudinal_context import refresh_coordination_pose, stamp_pose
       stamp_pose(CC, sample_ns=int(self.sm['deviceMotion'].timestamp),
                  valid=self.coordination_pose_valid and self.sm.valid['extrinsicsCalibration'] and self.sm.valid['deviceMotion'])

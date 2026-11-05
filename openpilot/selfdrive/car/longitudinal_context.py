@@ -11,7 +11,10 @@ from opendbc.car.ford.longitudinal_precharge import PRECHARGE_PROTOCOL_VERSION
 
 
 class LongitudinalContext:
-  def __init__(self, enabled=False, *, retention_enabled=False):
+  def __init__(self, enabled=False, *, retention_enabled=False, reference_enabled=False):
+    if retention_enabled and reference_enabled:
+      raise ValueError("Navigator coast reference cannot be combined with receipt retention")
+    self.reference_enabled = bool(enabled and reference_enabled)
     self.enabled = enabled
     self.retention_enabled = bool(enabled and retention_enabled)
     self.epoch = time.monotonic_ns()
@@ -38,17 +41,25 @@ class LongitudinalContext:
     fresh = output_valid and f.epoch == self.epoch and 0 <= now_ns / 1e9 - f.t <= .100000001 and 0 < f.sequence <= self.sequence
     self.feedback = f if fresh else None
     stamp_allocator_request(CC, now_ns, target=target, target_ns=target_ns, target_valid=target_valid,
-                            feedback=self.feedback, retention_enabled=self.retention_enabled)
+                            feedback=self.feedback, retention_enabled=self.retention_enabled, reference_enabled=self.reference_enabled)
     if CC.enabled and fresh and f.fault:
       self.fault = True
     if self.fault:
       CC.longActive = False
 
 
-def stamp_allocator_request(CC, now_ns, *, target=None, target_ns=0, target_valid=False, feedback=None, retention_enabled=False):
+def stamp_allocator_request(CC, now_ns, *, target=None, target_ns=0, target_valid=False, feedback=None, retention_enabled=False, reference_enabled=False):
   """Opt in with this control's consumed target; unknown peer feedback stays nominal."""
   request = CC.navigatorLongitudinal
   request.allocatorVersion = PRECHARGE_PROTOCOL_VERSION
+  if reference_enabled:
+    from opendbc.car.ford.longitudinal_reference_feedback import MODEL_ID, REQUEST_VERSION as REFERENCE_REQUEST_VERSION, ReferenceReceipt
+    request.allocatorVersion = REFERENCE_REQUEST_VERSION
+    reason = getattr(feedback, 'reason', '')
+    if isinstance(reason, str) and reason.startswith(('bounded-release-reference-', 'bounded-release-selection-')):
+      receipt = ReferenceReceipt.parse(reason)
+      if receipt is None or receipt.model_id != MODEL_ID:
+        request.allocatorVersion = PRECHARGE_PROTOCOL_VERSION
   request.retentionVersion = REQUEST_VERSION if retention_enabled else 0
   target_finite = target is not None and math.isfinite(target)
   request.targetAcceleration = float(target) if target_finite else 0.
@@ -115,6 +126,15 @@ def retention_startup_enabled(*, supported=False, environ=None):
 def history_release_startup_enabled(*, supported=False, environ=None):
   """Explicit developer launch selection, read once by card; unset is OFF."""
   return bool(supported and (os.environ if environ is None else environ).get('NAVIGATOR_HISTORY_RELEASE') == '1')
+
+
+def coast_reference_startup_enabled(*, supported=False, environ=None):
+  """Explicit process startup selection; retention pairing remains unsupported."""
+  env = os.environ if environ is None else environ
+  selected = supported and env.get('NAVIGATOR_COAST_REFERENCE') == '1'
+  if selected and retention_startup_enabled(supported=True, environ=env):
+    raise ValueError("Navigator coast reference cannot be combined with receipt retention")
+  return bool(selected)
 
 
 def feed_controller_context(controller, *, control_valid, state_ns=0, state_valid=False, speed_ns=0):
