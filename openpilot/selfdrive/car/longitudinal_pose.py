@@ -1,6 +1,7 @@
 """Navigator expiry-boundary consumer pose recovery."""
 
 import math
+from dataclasses import dataclass
 from openpilot.selfdrive.car.longitudinal_context import refresh_coordination_pose
 from openpilot.selfdrive.locationd.helpers import PoseCalibrator
 
@@ -16,6 +17,18 @@ class FrozenInputs(dict):
     pass
 
 
+@dataclass(frozen=True)
+class PoseRefreshFailure:
+  initial_clock_ns: int
+  selection_clock_ns: int
+  final_clock_ns: int
+  original_source_ns: int
+  producer_ns: int
+  selected_source_ns: int
+  stage: str
+  reason: str
+
+
 class ConsumerPoseRefresh:
   def __init__(self, clock_ns=None):
     self.clock_ns = clock_ns
@@ -26,8 +39,45 @@ class ConsumerPoseRefresh:
     self.epoch = None
     self.cached = None
     self.reason = 'baseline'
+    self.failure_diagnostic = None
 
   def refresh(self, cc, sm, now_ns, *, enabled=True, speed=8.0):
+    self.failure_diagnostic = None
+    q = cc.navigatorLongitudinal
+    active = enabled and q.enabled and cc.enabled and cc.longActive and speed >= 3 and str(cc.actuators.longControlState) == 'pid'
+    if not active or self.clock_ns is None:
+      return self._refresh(cc, sm, now_ns, enabled=enabled, speed=speed)
+    selection_ns = self.clock_ns()
+    self.apply_time_ns = selection_ns
+    stage = 'selection_clock'
+    if selection_ns < now_ns:
+      result = cc
+      reason = 'not_run'
+    else:
+      result = self._refresh(cc, sm, selection_ns, enabled=enabled, speed=speed)
+      reason = self.reason
+      previous_ns = self.apply_time_ns
+      final_ns = self.clock_ns()
+      self.apply_time_ns = final_ns
+      rq = result.navigatorLongitudinal
+      stage = 'canonical'
+      if final_ns < previous_ns or not (0 < rq.poseMonoTime <= rq.producerMonoTime <= final_ns
+                                       and final_ns - rq.producerMonoTime <= 100_000_000
+                                       and final_ns - rq.poseMonoTime <= 100_000_000):
+        stage = 'final_clock'
+      elif rq.poseValid:
+        return result
+    if stage != 'canonical':
+      r = result.as_builder()
+      r.navigatorLongitudinal.poseValid = False
+      result = r.as_reader()
+      self.reason = 'clock_guard'
+    self.failure_diagnostic = PoseRefreshFailure(
+      now_ns, selection_ns, self.apply_time_ns, int(q.poseMonoTime), int(q.producerMonoTime),
+      int(result.navigatorLongitudinal.poseMonoTime), stage, reason)
+    return result
+
+  def _refresh(self, cc, sm, now_ns, *, enabled=True, speed=8.0):
     self.apply_time_ns = now_ns
     self.reason = 'baseline'
     q = cc.navigatorLongitudinal

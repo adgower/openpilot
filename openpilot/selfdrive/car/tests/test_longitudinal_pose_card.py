@@ -123,7 +123,7 @@ def test_live_apply_clock_is_shared_by_tracking_and_controller(monkeypatch):
     def all_checks(self, *_):
       return True
 
-  times = iter([1_001_000_000, 1_002_000_000])
+  times = iter([1_000_000_000, 1_001_000_000, 1_002_000_000, 1_002_000_000])
   h = NS(
     initialized_prev=True,
     sm=SM(modelV2=None),

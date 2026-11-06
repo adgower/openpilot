@@ -191,7 +191,7 @@ def test_healthy_pose_is_not_refreshed_or_filtered_before_expiry():
 @pytest.mark.parametrize('late_clock', [1_001_000_000, 1_100_000_000, 999_000_000])
 def test_post_drain_apply_clock_is_used_and_revalidated(late_clock):
   c = command()
-  times = iter([late_clock, late_clock])
+  times = iter([1_000_000_000, late_clock, late_clock, late_clock])
   f = ConsumerPoseRefresh(clock_ns=lambda: next(times))
   r = f.refresh(c.as_reader(), Inputs(1_000_000_000, 970_000_000), 1_000_000_000)
   assert f.apply_time_ns == late_clock
@@ -200,7 +200,7 @@ def test_post_drain_apply_clock_is_used_and_revalidated(late_clock):
 
 def test_final_clock_cannot_extend_pose_lifetime_after_calibration_work():
   c = command()
-  times = iter([1_001_000_000, 1_080_000_000])
+  times = iter([1_000_000_000, 1_001_000_000, 1_080_000_000, 1_080_000_000])
   f = ConsumerPoseRefresh(clock_ns=lambda: next(times))
   r = f.refresh(c.as_reader(), Inputs(1_000_000_000, 970_000_000), 1_000_000_000)
   assert not r.navigatorLongitudinal.poseValid and f.apply_time_ns == 1_080_000_000
