@@ -137,14 +137,23 @@ class Car:
     self.coordination_pose_sm = None
     if self.CI.CC is not None and self.longitudinal_coordination_enabled:
       self.CI.CC.longitudinal_coordination_enabled = True
-      from openpilot.selfdrive.car.longitudinal_context import retention_startup_enabled, history_release_startup_enabled, coast_reference_startup_enabled
+      from openpilot.selfdrive.car.longitudinal_context import (
+        retention_startup_enabled, history_release_startup_enabled, coast_reference_startup_enabled,
+        production_reference_startup_enabled,
+      )
       self.CI.CC.configure_retention(enabled=retention_startup_enabled(supported=True))
       configure_history_release = getattr(self.CI.CC, "configure_history_release", None)
       if callable(configure_history_release):
         configure_history_release(enabled=history_release_startup_enabled(supported=True))
+      production_enabled = production_reference_startup_enabled(supported=True)
       reference_enabled = coast_reference_startup_enabled(supported=True)
       configure_reference = getattr(self.CI.CC, "configure_coast_reference", None)
-      if callable(configure_reference):
+      if production_enabled:
+        configure_production = getattr(self.CI.CC, 'configure_production_reference', None)
+        if not callable(configure_production):
+          raise ValueError('Navigator production reference requires a paired V5 consumer')
+        configure_production()
+      elif callable(configure_reference):
         configure_reference(enabled=reference_enabled)
       elif reference_enabled:
         raise ValueError("Navigator coast reference requires a paired consumer with reference support")

@@ -137,6 +137,15 @@ def coast_reference_startup_enabled(*, supported=False, environ=None):
   return bool(selected)
 
 
+def production_reference_startup_enabled(*, supported=False, environ=None):
+  """Read once: the paired V5 experiment is absent unless explicitly selected."""
+  env = os.environ if environ is None else environ
+  selected = supported and env.get('NAVIGATOR_COAST_PRODUCTION') == '1'
+  if selected and retention_startup_enabled(supported=True, environ=env):
+    raise ValueError('Navigator production reference cannot be combined with receipt retention')
+  return bool(selected)
+
+
 def feed_controller_context(controller, *, control_valid, state_ns=0, state_valid=False, speed_ns=0):
   controller.coordination_control_valid = bool(control_valid)
   controller.coordination_state_ns = state_ns if isinstance(state_ns, int) and 0 < state_ns < 2**64 else 0

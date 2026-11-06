@@ -37,18 +37,25 @@ def long_control_state_trans(active, long_control_state, should_stop, brake_pres
   return long_control_state
 
 class LongControl:
-  def __init__(self, CP, *, retention_enabled=False, reference_enabled=False):
+  def __init__(self, CP, *, retention_enabled=False, reference_enabled=False,
+               production_enabled=False, production_run_id=0):
     self.CP = CP
     self.long_control_state = LongCtrlState.off
     self.pid = PIDController(0.0, (CP.longitudinalTuning.kiBP, CP.longitudinalTuning.kiV),
                              rate=1 / DT_CTRL)
     self.last_output_accel = 0.0
     self.reference_integral = None
+    self.production = None
+    reference_enabled = bool(reference_enabled or production_enabled)
     if reference_enabled:
       if retention_enabled:
         raise ValueError("Navigator coast reference cannot be combined with receipt retention")
       from opendbc.car.ford.longitudinal_reference_feedback import ReferenceIntegral
       self.reference_integral = ReferenceIntegral()
+    if production_enabled:
+      from openpilot.selfdrive.car.production_longitudinal import ProductionProducer, ProductionIntegral
+      self.production = ProductionProducer(self, CP, run_id=production_run_id)
+      self.reference_integral = ProductionIntegral(self.production)
     self.command_recovery = CommandRecovery(retention_enabled=retention_enabled,
       nominal_policy=self._reference_nominal if reference_enabled else None)
 

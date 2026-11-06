@@ -53,17 +53,23 @@ class Controls:
     self.calibrated_pose: Pose | None = None
 
     from opendbc.car.ford.longitudinal_coordination import coordination_available
-    from openpilot.selfdrive.car.longitudinal_context import LongitudinalContext, retention_startup_enabled, coast_reference_startup_enabled
+    from openpilot.selfdrive.car.longitudinal_context import (
+      LongitudinalContext, retention_startup_enabled, coast_reference_startup_enabled,
+      production_reference_startup_enabled,
+    )
     coordination_enabled = bool(coordination_available(self.CP) and self.params.get_bool("FordPrefLongitudinalCoordination"))
     self.retention_enabled = retention_startup_enabled(supported=coordination_enabled)
-    self.reference_enabled = coast_reference_startup_enabled(supported=coordination_enabled)
+    self.production_enabled = production_reference_startup_enabled(supported=coordination_enabled)
+    self.reference_enabled = bool(self.production_enabled or coast_reference_startup_enabled(supported=coordination_enabled))
     self.longitudinal_context = LongitudinalContext(coordination_enabled, retention_enabled=self.retention_enabled,
                                                      reference_enabled=self.reference_enabled)
     self.coordination_pose_sm = (messaging.SubMaster(['deviceMotion', 'extrinsicsCalibration'])
                                  if self.longitudinal_context.enabled else None)
     self.coordination_pose_calibrator = PoseCalibrator()
     self.coordination_pose_valid = False
-    self.LoC = LongControl(self.CP, retention_enabled=self.retention_enabled, reference_enabled=self.reference_enabled)
+    self.production_radar_sm = messaging.SubMaster(['radarState']) if self.production_enabled else None
+    self.LoC = LongControl(self.CP, retention_enabled=self.retention_enabled, reference_enabled=self.reference_enabled,
+                          production_enabled=self.production_enabled, production_run_id=self.longitudinal_context.epoch)
     self.VM = VehicleModel(self.CP)
     self.LaC: LatControl
     if self.CP.steerControlType == car.CarParams.SteerControlType.angle:
@@ -163,6 +169,19 @@ class Controls:
 
     # accel PID loop
     pid_accel_limits = self.CI.get_pid_accel_limits(self.CP, CS.vEgo, CS.vCruise * CV.KPH_TO_MS)
+    if getattr(self.LoC, 'production', None) is not None:
+      self.production_radar_sm.update(0)
+      radar = self.production_radar_sm['radarState']
+      self.LoC.production.prepare(
+        CC, CS, float(long_plan.aTarget), bool(long_plan.shouldStop), pid_accel_limits,
+        self.sm['carOutput'].actuatorsOutput.navigatorLongitudinal,
+        now_ns=coordination_now_ns, cutoff_ns=self.sm.logMonoTime['carOutput'],
+        source_valid=self.sm.all_checks(['carState', 'longitudinalPlan']),
+        urgent=bool(long_plan.fcw or self.sm['driverMonitoringState'].noResponseForceDecel or
+                    self.sm['selfdriveState'].state == State.softDisabling),
+        no_lead=not radar.leadOne.status and not long_plan.hasLead,
+        radar_ns=self.production_radar_sm.logMonoTime['radarState'],
+        radar_valid=self.production_radar_sm.all_checks(['radarState']))
     actuators.accel = float(self.LoC.update(CC.longActive, CS, long_plan.aTarget, long_plan.shouldStop, pid_accel_limits,
       feedback=self.longitudinal_context.feedback, now=coordination_now_ns / 1e9,
       epoch=self.longitudinal_context.epoch, sequence=self.longitudinal_context.sequence,
@@ -210,6 +229,8 @@ class Controls:
                         source_ns=self.sm.logMonoTime['vehicleParameters'],
                         state_ns=self.sm.logMonoTime['carState'], speed=CS.vEgo,
                         valid=self.sm.valid['vehicleParameters'] and self.sm.valid['carState'])
+    if getattr(self.LoC, 'production', None) is not None:
+      self.LoC.production.finalize_control(CC)
     return CC, lac_log
 
   def publish(self, CC, lac_log):
