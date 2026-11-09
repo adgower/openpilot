@@ -4,6 +4,9 @@
 def feed_tracking_context(strategy, *, now_ns, state_ns, control_ns, control_valid, model_ns, model_valid, model, state):
   # Missing/unknown context disables the *extra* correction only.
   lane_change = model is None or str(model.meta.laneChangeState) != 'off' or state.leftBlinker or state.rightBlinker
+  set_preview = getattr(strategy, 'set_path_preview', None)
+  if set_preview is not None:
+    set_preview(model if control_valid and model_valid and not lane_change else None, model_ns)
   strategy.set_context(
     now_ns=now_ns, state_ns=state_ns, control_ns=control_ns, model_ns=model_ns, model_valid=bool(control_valid and model_valid), lane_change=lane_change
   )
