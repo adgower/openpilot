@@ -33,7 +33,7 @@ def test_selected_trial_reaches_real_packer_and_preserves_other_packets(sign, co
   current, packet, state = setup_controller(CarController, frame=0)
   previous, _, old_state = setup_controller(CarController, frame=0)
   trial = create_tracking_trial(current.CP, enabled=True, roll_mapping_enabled=True, high_speed_enabled=True)
-  assert type(trial).__name__ == 'UnwindAllocation'
+  assert type(trial).__name__ == 'WheelTargetTrial'
   current.lateral_angle = trial
   previous.lateral_angle = previous_trial(previous.CP, enabled=True)
   trial.input_state_valid = previous.lateral_angle.input_state_valid = True
