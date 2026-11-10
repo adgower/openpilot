@@ -8,7 +8,7 @@ from opendbc.car.ford.lateral_angle_tracking_budget import BudgetedTrackingProto
 @pytest.mark.parametrize('enabled', [False, True])
 @pytest.mark.parametrize('pinion,low_speed', [(False, False), (True, False), (False, True), (True, True)])
 def test_existing_opt_in_selects_budgeted_trial_only_with_required_flags(enabled, pinion, low_speed):
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.flags &= ~int(FordFlags.PINION_CURVATURE | FordFlags.LOW_SPEED_GAIN)
   cp.flags |= int(FordFlags.PINION_CURVATURE) if pinion else 0
   cp.flags |= int(FordFlags.LOW_SPEED_GAIN) if low_speed else 0

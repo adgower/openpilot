@@ -13,7 +13,7 @@ from opendbc.car.ford.longitudinal_coordination import Torque
 def test_actual_card_apply_boundary_uses_fresh_copy_and_actual_controller(monkeypatch):
   monkeypatch.setattr(card, "REPLAY", True)
   now = 1_000_000_000
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.openpilotLongitudinalControl = True
   c = CarController(DBC[cp.carFingerprint], cp)
   c.longitudinal_coordination_enabled = True
@@ -85,7 +85,7 @@ def test_actual_constructor_only_creates_subscriber_for_enabled_navigator(monkey
   monkeypatch.setattr(card.messaging, 'SubMaster', sub)
   monkeypatch.setattr(card.messaging, 'sub_sock', lambda *a, **kw: None)
   monkeypatch.setattr(card.messaging, 'PubMaster', lambda *a, **kw: NS(sock={'sendcan': None}))
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.openpilotLongitudinalControl = alpha
   ci = CarInterface(cp)
   c = card.Car(CI=ci, RI=NS())
@@ -100,7 +100,7 @@ def test_live_apply_clock_is_shared_by_tracking_and_controller(monkeypatch):
   monkeypatch.setattr(card, 'time', NS(monotonic=lambda: 1.0))
   tracking_times = []
   monkeypatch.setattr(tracking_context, 'feed_tracking_context', lambda *a, **kw: tracking_times.append(kw['now_ns']))
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.openpilotLongitudinalControl = True
   c = CarController(DBC[cp.carFingerprint], cp)
   c.longitudinal_coordination_enabled = True

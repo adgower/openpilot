@@ -20,6 +20,7 @@ from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
+from openpilot.selfdrive.car.navigator_identity import migrate_previous_navigator_params
 
 REPLAY = "REPLAY" in os.environ
 
@@ -194,7 +195,7 @@ class Car:
     # Write previous route's CarParams
     prev_cp = self.params.get("CarParamsPersistent")
     if prev_cp is not None:
-      self.params.put("CarParamsPrevRoute", prev_cp, block=True)
+      self.params.put("CarParamsPrevRoute", migrate_previous_navigator_params(prev_cp, self.CP), block=True)
 
     # Write CarParams for controls and radard
     cp_bytes = self.CP.to_bytes()

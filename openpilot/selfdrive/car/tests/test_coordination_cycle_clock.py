@@ -109,7 +109,7 @@ def _exercise_producer_clock(monkeypatch, case):
 
   secondary.update = drain
   primary = Inputs(early - (200_000_000 if case == 'stale' else 20_000_000))
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.openpilotLongitudinalControl = True
   state = structs.CarState(vEgo=9.12, vEgoRaw=9.12, canValid=True)
   params = log.VehicleParameters.new_message(steerRatio=22.5, stiffnessFactor=1.0)

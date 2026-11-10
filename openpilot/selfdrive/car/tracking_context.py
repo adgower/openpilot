@@ -15,7 +15,7 @@ def feed_tracking_context(strategy, *, now_ns, state_ns, control_ns, control_val
 def create_tracking_trial(CP, *, enabled, roll_mapping_enabled=False, high_speed_enabled=False):
   from opendbc.car.ford.values import CAR, FordFlags
 
-  if not enabled or CP.carFingerprint != CAR.FORD_EXPEDITION_MK4 or not CP.flags & FordFlags.PINION_CURVATURE or not CP.flags & FordFlags.LOW_SPEED_GAIN:
+  if not enabled or CP.carFingerprint != CAR.LINCOLN_NAVIGATOR_MK4 or not CP.flags & FordFlags.PINION_CURVATURE or not CP.flags & FordFlags.LOW_SPEED_GAIN:
     return None
   if roll_mapping_enabled and high_speed_enabled:
     from opendbc.car.ford.lateral_angle_unwind_allocation import create_tracking_trial as create_admitted_trial

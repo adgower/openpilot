@@ -203,7 +203,7 @@ class Controls:
 
     # Snapshot the exact producer inputs, after computing/sanitizing this target.
     from opendbc.car.ford.values import CAR, FordFlags
-    if (self.CP.carFingerprint == CAR.FORD_EXPEDITION_MK4
+    if (self.CP.carFingerprint == CAR.LINCOLN_NAVIGATOR_MK4
         and self.CP.flags & FordFlags.PINION_CURVATURE):
       from openpilot.selfdrive.car.calibration_context import stamp_calibration
       stamp_calibration(CC, lp, now_ns=time.monotonic_ns(),

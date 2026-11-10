@@ -117,9 +117,9 @@ class TestRealPath:
     from opendbc.car.ford.values import CAR, DBC
     from opendbc.car.ford.longitudinal_coordination import Torque
 
-    cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+    cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
     cp.openpilotLongitudinalControl = True
-    ctrl = CarController(DBC[CAR.FORD_EXPEDITION_MK4], cp)
+    ctrl = CarController(DBC[CAR.LINCOLN_NAVIGATOR_MK4], cp)
     ctrl.longitudinal_coordination_enabled = True
     ctrl.configure_retention(enabled=consumer)
     ctrl.brake_request = True
@@ -180,7 +180,7 @@ class TestRealPath:
     from opendbc.car.ford.interface import CarInterface
     from opendbc.car.ford.values import CAR
 
-    cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+    cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
     cp.openpilotLongitudinalControl = True
     ctx = LongitudinalContext(True, retention_enabled=True)
     ctx.epoch = 1

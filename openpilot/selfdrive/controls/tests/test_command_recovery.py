@@ -12,7 +12,7 @@ def controller(monkeypatch):
   from opendbc.car.ford.interface import CarInterface
   from opendbc.car.ford.values import CAR
 
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   loc = LongControl(cp)
   return loc
 

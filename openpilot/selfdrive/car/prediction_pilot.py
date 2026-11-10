@@ -258,7 +258,7 @@ class PredictionPilot:
       and not o.accFaulted
       and controller.longitudinal_coordination_enabled
       and controller.CP.openpilotLongitudinalControl
-      and controller.CP.carFingerprint == CAR.FORD_EXPEDITION_MK4
+      and controller.CP.carFingerprint == CAR.LINCOLN_NAVIGATOR_MK4
       and controller.coordination_control_valid
       and not controller.coordination_fault
     )
@@ -297,7 +297,7 @@ class PredictionPilot:
     observer = getattr(controller, 'last_observer', None)
     context = Context(
       source_id=w.source_id,
-      alpha=bool(controller.CP.openpilotLongitudinalControl and controller.CP.carFingerprint == CAR.FORD_EXPEDITION_MK4),
+      alpha=bool(controller.CP.openpilotLongitudinalControl and controller.CP.carFingerprint == CAR.LINCOLN_NAVIGATOR_MK4),
       enabled=bool(cc.enabled),
       long_active=bool(cc.longActive),
       phase=str(cc.actuators.longControlState),

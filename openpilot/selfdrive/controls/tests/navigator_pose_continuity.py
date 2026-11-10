@@ -27,7 +27,7 @@ class Inputs(dict):
 
 class PosePipeline:
   def __init__(self, enabled=True, seen_motion=True):
-    cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+    cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
     cp.openpilotLongitudinalControl = True
     self.cp = cp
     self.now = 1_000_000_000
@@ -56,7 +56,7 @@ class PosePipeline:
     c.curvature = c.desired_curvature = 0.
     c.LoC = LongControl(cp)
     c.pm = NS(send=lambda name, message: self.messages.__setitem__(name, message.to_bytes()))
-    self.controller = CarController(DBC[CAR.FORD_EXPEDITION_MK4], cp)
+    self.controller = CarController(DBC[CAR.LINCOLN_NAVIGATOR_MK4], cp)
     self.controller.longitudinal_coordination_enabled = enabled
     self.controller.coordination_control_valid = True
     self.state = NS(out=self.sm['carState'], buttons_stock_values=defaultdict(int),

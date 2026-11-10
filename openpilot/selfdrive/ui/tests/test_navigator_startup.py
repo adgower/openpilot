@@ -31,7 +31,7 @@ def test_saved_options_select_paired_controller_on_startup(tmp_path, pinion, tri
   obj = SimpleNamespace(params=params, can_callbacks=(None, None))
   env = {'self': obj, 'get_car': car_helpers.get_car, 'obd_callback': lambda _: None,
          'alpha_long_allowed': False, 'is_release': False, 'cached_params': None}
-  fingerprint = (CAR.FORD_EXPEDITION_MK4, gen_empty_fingerprint(), 'TESTVIN', [], 'fixed', True)
+  fingerprint = (CAR.LINCOLN_NAVIGATOR_MK4, gen_empty_fingerprint(), 'TESTVIN', [], 'fixed', True)
   with patch.object(car_helpers, 'fingerprint', return_value=fingerprint):
     exec(compile(ast.Module(body=[assignment], type_ignores=[]), str(source), 'exec'), env)
   assert bool(obj.CI.CP.flags & FordFlags.PINION_CURVATURE) == pinion

@@ -112,7 +112,7 @@ class TogglesLayoutMici(NavScroller):
   def _navigator_supported() -> bool:
     cp = ui_state.CP
     return (not ui_state.started and cp is not None and cp.brand == "ford" and
-            cp.carFingerprint == "FORD_EXPEDITION_MK4" and bool(cp.flags & 1))
+            cp.carFingerprint == "LINCOLN_NAVIGATOR_MK4" and bool(cp.flags & 1))
 
   def _on_navigator_toggle(self, state: bool, key: str):
     if not self._navigator_supported():

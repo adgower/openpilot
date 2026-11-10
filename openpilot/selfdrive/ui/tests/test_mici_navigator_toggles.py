@@ -39,7 +39,7 @@ def layout():
   params = Mock()
   params.get_bool.side_effect = lambda key: key in KEYS
   state = SimpleNamespace(params=params, started=False, engaged=False,
-                          CP=SimpleNamespace(brand='ford', carFingerprint='FORD_EXPEDITION_MK4', flags=1),
+                          CP=SimpleNamespace(brand='ford', carFingerprint='LINCOLN_NAVIGATOR_MK4', flags=1),
                           add_engaged_transition_callback=Mock(), update_params=Mock(), has_longitudinal_control=True)
   env = {'NavScroller': Nav, 'ui_state': state, 'gui_app': Mock(), 'restart_needed_callback': Mock(),
          'BigMultiParamToggle': Widget, 'BigToggle': Widget, 'BigParamControl': Widget,
@@ -65,7 +65,7 @@ def test_callbacks_do_not_write_onroad_or_without_vehicle():
   for unsupported in ('onroad', 'no_vehicle', 'wrong_vehicle'):
     state.started = unsupported == 'onroad'
     state.CP = None if unsupported == 'no_vehicle' else SimpleNamespace(
-      brand='ford', carFingerprint='OTHER' if unsupported == 'wrong_vehicle' else 'FORD_EXPEDITION_MK4', flags=1)
+      brand='ford', carFingerprint='OTHER' if unsupported == 'wrong_vehicle' else 'LINCOLN_NAVIGATOR_MK4', flags=1)
     for key in KEYS:
       dict(obj._refresh_toggles)[key].callback(False)
     state.params.put_bool.assert_not_called()

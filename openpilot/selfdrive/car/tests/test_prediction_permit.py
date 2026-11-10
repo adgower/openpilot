@@ -83,7 +83,7 @@ def fixture():
   o = structs.CarState(vEgo=0.0, canValid=True, gearShifter=structs.CarState.GearShifter.park)
   cs = NS(out=o, longitudinal_brake_torque=Torque(1.0, 0.0))
   c = NS(
-    CP=NS(openpilotLongitudinalControl=True, carFingerprint=CAR.FORD_EXPEDITION_MK4),
+    CP=NS(openpilotLongitudinalControl=True, carFingerprint=CAR.LINCOLN_NAVIGATOR_MK4),
     coordination_fault=None,
     coordination_control_valid=True,
     longitudinal_coordination_enabled=True,
@@ -345,7 +345,7 @@ def test_actual_card_feeds_source_timestamp_before_controller(monkeypatch):
   from opendbc.car.ford.values import DBC
 
   monkeypatch.setattr(card, 'REPLAY', True)
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.openpilotLongitudinalControl = True
   c = CarController(DBC[cp.carFingerprint], cp)
   c.longitudinal_coordination_enabled = True

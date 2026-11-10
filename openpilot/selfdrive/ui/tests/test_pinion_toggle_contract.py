@@ -12,7 +12,7 @@ def load_methods():
   klass = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'TogglesLayout')
   methods = [n for n in klass.body if isinstance(n, ast.FunctionDef) and n.name in ('_pinion_option_supported', '_toggle_callback')]
   module = ast.Module(body=methods, type_ignores=[])
-  state = SimpleNamespace(started=False, CP=SimpleNamespace(brand='ford', carFingerprint='FORD_EXPEDITION_MK4', flags=1))
+  state = SimpleNamespace(started=False, CP=SimpleNamespace(brand='ford', carFingerprint='LINCOLN_NAVIGATOR_MK4', flags=1))
   env = {'ui_state': state}
   exec(compile(ast.fix_missing_locations(module), str(SOURCE), 'exec'), env)
   return env, state

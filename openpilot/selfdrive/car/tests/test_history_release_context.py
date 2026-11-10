@@ -36,7 +36,7 @@ def construct_car(monkeypatch, *, coordination=True, alpha=True, old_child=False
   params.put_bool('OpenpilotEnabledToggle', True, block=True)
   assert Params().get_bool('FordPrefLongitudinalCoordination') == coordination
   assert Params().get_bool('OpenpilotEnabledToggle')
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.openpilotLongitudinalControl = alpha
   ci = CarInterface(cp)
   if not reference_hook:

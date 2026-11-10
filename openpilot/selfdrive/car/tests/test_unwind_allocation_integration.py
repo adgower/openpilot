@@ -107,12 +107,12 @@ def test_selected_trial_reaches_real_packer_and_preserves_other_packets(sign, co
 
 
 def test_child_factory_defaults_and_vehicle_prerequisites():
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.flags |= int(FordFlags.PINION_CURVATURE | FordFlags.LOW_SPEED_GAIN)
   assert child_trial(cp) is None
   for flag in [FordFlags.PINION_CURVATURE, FordFlags.LOW_SPEED_GAIN]:
     # CarParams is a Cap'n Proto builder; construct fresh parameters per case.
-    missing = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+    missing = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
     missing.flags = cp.flags & ~int(flag)
     assert child_trial(missing, enabled=True) is None
   other = CarInterface.get_non_essential_params(CAR.FORD_F_150_MK14)

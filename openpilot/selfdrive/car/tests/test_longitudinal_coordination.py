@@ -30,7 +30,7 @@ class TestRuntime(unittest.TestCase):
     from openpilot.selfdrive.selfdrived.events import EVENTS, ET
     from opendbc.car.ford.interface import CarInterface
     from opendbc.car.ford.values import CAR
-    cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+    cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
     cp.openpilotLongitudinalControl = True
     output = structs.CarControl.Actuators()
     self.assertIsNone(coordination_event(cp, output))
@@ -107,7 +107,7 @@ def _run_longitudinal_pipeline(monkeypatch):
   clock = [10_000_000_000]
   monkeypatch.setattr(controlsd, 'time', NS(monotonic_ns=lambda: clock[0]))
   monkeypatch.setattr(card, 'time', NS(monotonic=lambda: clock[0] / 1e9))
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.openpilotLongitudinalControl = True
   ci = CarInterface(cp)
   ci.CC.longitudinal_coordination_enabled = True
@@ -199,7 +199,7 @@ def test_parent_freezes_only_growth_with_serialized_current_feedback():
   from opendbc.car.ford.values import CAR
   from opendbc.car.ford.longitudinal_coordination import feedback_from_wire
   from openpilot.selfdrive.controls.lib.longcontrol import LongControl
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   parent = LongControl(cp)
   parent.long_control_state = structs.CarControl.Actuators.LongControlState.pid
   parent.pid.i = .3
@@ -221,7 +221,7 @@ def test_can_brake_source_timestamp_is_not_refreshed_by_cached_state():
   from opendbc.car import Bus
   from opendbc.car.ford.interface import CarInterface
   from opendbc.car.ford.values import CAR, DBC
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   interface = CarInterface(cp)
   assert 125 not in interface.can_parsers[Bus.pt].addresses
   interface.CS.enable_longitudinal_coordination(interface.can_parsers[Bus.pt])

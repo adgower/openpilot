@@ -191,7 +191,7 @@ class TogglesLayout(Widget):
   def _pinion_option_supported() -> bool:
     cp = ui_state.CP
     return (not ui_state.started and cp is not None and cp.brand == "ford" and
-            cp.carFingerprint == "FORD_EXPEDITION_MK4" and bool(cp.flags & 1))
+            cp.carFingerprint == "LINCOLN_NAVIGATOR_MK4" and bool(cp.flags & 1))
 
   def _toggle_callback(self, state: bool, param: str):
     if param in ("FordPrefSteerAngleCurvature", "FordPrefLowSpeedGain") and not self._pinion_option_supported():

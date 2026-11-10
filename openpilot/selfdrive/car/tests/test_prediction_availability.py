@@ -118,7 +118,7 @@ def test_actual_card_startup_keeps_normal_alpha_with_optional_worker(monkeypatch
   from opendbc.car.ford.interface import CarInterface
   from opendbc.car.ford.values import CAR
 
-  cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+  cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
   cp.openpilotLongitudinalControl = True
   ci = CarInterface(cp)
   writes, starts, attempts = [], [], []

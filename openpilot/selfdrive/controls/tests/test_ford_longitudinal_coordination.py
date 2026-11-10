@@ -9,7 +9,7 @@ from openpilot.selfdrive.controls.lib.longcontrol import LongControl, LongCtrlSt
 
 class TestFordLongitudinalRestart(unittest.TestCase):
   def test_stopping_to_pid_with_capped_positive_demand_releases_brake(self):
-    cp = CarInterface.get_non_essential_params(CAR.FORD_EXPEDITION_MK4)
+    cp = CarInterface.get_non_essential_params(CAR.LINCOLN_NAVIGATOR_MK4)
     limits = CarInterface.get_pid_accel_limits(cp, 10., 10.)
     self.assertEqual(float(limits[1]), .2)
     control = LongControl(cp)
