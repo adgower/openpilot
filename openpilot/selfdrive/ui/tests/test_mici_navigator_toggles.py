@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-SOURCE = Path(__file__).parents[1] / 'mici/layouts/settings/toggles.py'
+SOURCE = Path(__file__).parents[1] / 'mici/layouts/settings/driving.py'
 KEYS = ('FordPrefSteerAngleCurvature', 'FordPrefLowSpeedGain')
 
 
@@ -35,7 +35,7 @@ class Nav:
 
 def layout():
   tree = ast.parse(SOURCE.read_text())
-  cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'TogglesLayoutMici')
+  cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'DrivingLayoutMici')
   params = Mock()
   params.get_bool.side_effect = lambda key: key in KEYS
   state = SimpleNamespace(params=params, started=False, engaged=False,
@@ -45,7 +45,7 @@ def layout():
          'BigMultiParamToggle': Widget, 'BigToggle': Widget, 'BigParamControl': Widget,
          'InitialCruiseSpeedButton': Widget}
   exec(compile(ast.Module(body=[cls], type_ignores=[]), str(SOURCE), 'exec'), env)
-  return env['TogglesLayoutMici'](), state
+  return env['DrivingLayoutMici'](), state
 
 
 def test_controls_present_and_refresh_enabled_values():
