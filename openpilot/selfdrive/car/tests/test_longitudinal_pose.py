@@ -204,3 +204,31 @@ def test_final_clock_cannot_extend_pose_lifetime_after_calibration_work():
   f = ConsumerPoseRefresh(clock_ns=lambda: next(times))
   r = f.refresh(c.as_reader(), Inputs(1_000_000_000, 970_000_000), 1_000_000_000)
   assert not r.navigatorLongitudinal.poseValid and f.apply_time_ns == 1_080_000_000
+
+
+@pytest.mark.parametrize(('fresh_read', 'healthy', 'expected_reads', 'expected_valid'), [
+  (1, True, 1, True),
+  (2, True, 2, True),
+  (3, True, 2, False),
+  (1, False, 1, False),
+])
+def test_expired_pose_retry_is_bounded_and_preserves_hard_failures(fresh_read, healthy, expected_reads, expected_valid):
+  now = 1_000_000_000
+  c = command(now)
+  fresh_stamp = now - 41_728_285
+
+  class DelayedInputs(Inputs):
+    reads = 0
+
+    def update(self, *args):
+      self.reads += 1
+      if self.reads == fresh_read:
+        self['deviceMotion'].timestamp = fresh_stamp
+        self.valid['deviceMotion'] = healthy
+
+  sm = DelayedInputs(now, c.navigatorLongitudinal.poseMonoTime)
+  refresher = ConsumerPoseRefresh(clock_ns=lambda: now)
+  result = refresher.refresh(c.as_reader(), sm, now)
+  assert sm.reads == expected_reads
+  assert result.navigatorLongitudinal.poseValid == expected_valid
+  assert result.navigatorLongitudinal.poseMonoTime == (fresh_stamp if expected_valid else c.navigatorLongitudinal.poseMonoTime)

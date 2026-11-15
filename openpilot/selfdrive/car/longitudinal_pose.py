@@ -28,6 +28,14 @@ class ConsumerPoseRefresh:
     self.reason = 'baseline'
 
   def refresh(self, cc, sm, now_ns, *, enabled=True, speed=8.0):
+    result = self._refresh_once(cc, sm, now_ns, enabled=enabled, speed=speed)
+    if self.reason == 'expired_pose':
+      # One extra nonblocking read only after an otherwise valid request
+      # encountered a missing or aged observation. Preserve hard failures.
+      return self._refresh_once(cc, sm, self.apply_time_ns, enabled=enabled, speed=speed)
+    return result
+
+  def _refresh_once(self, cc, sm, now_ns, *, enabled, speed):
     self.apply_time_ns = now_ns
     self.reason = 'baseline'
     q = cc.navigatorLongitudinal
@@ -54,10 +62,10 @@ class ConsumerPoseRefresh:
       self.last_granted_source = None
       self.cached = None
 
-    def invalid():
+    def invalid(reason="invalid"):
       r = cc.as_builder()
       r.navigatorLongitudinal.poseValid = False
-      self.reason = 'invalid'
+      self.reason = reason
       return r.as_reader()
 
     if self.last_producer_source is not None and q.poseMonoTime < self.last_producer_source:
@@ -90,11 +98,12 @@ class ConsumerPoseRefresh:
           sq.poseValid
           and 0 < sm.logMonoTime['extrinsicsCalibration'] <= now_ns
           and q.poseMonoTime <= sq.poseMonoTime <= q.producerMonoTime
-          and 0 <= now_ns - sq.poseMonoTime <= 100_000_000
           and (self.last_granted_source is None or sq.poseMonoTime >= self.last_granted_source)
         )
         if not valid:
           return invalid()
+        if now_ns - sq.poseMonoTime > 100_000_000:
+          return invalid('expired_pose')
         result = r.as_reader()
         self.cached = (sq.poseMonoTime, list(r.orientationNED), list(r.angularVelocity))
         self.reason = 'refreshed'
@@ -116,6 +125,9 @@ class ConsumerPoseRefresh:
     if self.clock_ns is not None:
       applied_ns = self.clock_ns()
       self.apply_time_ns = applied_ns
-      if applied_ns < now_ns or applied_ns - q.producerMonoTime > 100_000_000 or not 0 <= applied_ns - result.navigatorLongitudinal.poseMonoTime <= 100_000_000:
+      if applied_ns < now_ns or applied_ns - q.producerMonoTime > 100_000_000:
         return invalid()
+      now_ns = applied_ns
+    if now_ns - result.navigatorLongitudinal.poseMonoTime > 100_000_000:
+      return invalid('expired_pose' if result is cc else 'invalid')
     return result
