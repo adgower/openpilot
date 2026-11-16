@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from openpilot.selfdrive.car.vision_curve_speed import AcknowledgedCurveSpeed, MPH
+from openpilot.selfdrive.car.vision_curve_speed import AcknowledgedCurveSpeed, MPH, measure_curve
 
 
 def model(curved, *, ramp=False):
@@ -42,7 +42,7 @@ def test_slow_and_restore_only_after_exit():
   assert len(up) == len(down)
   assert min(up) >= 13.5
   assert ceiling == 65
-  assert all(b[0] - a[0] >= 1 for a, b in zip(presses, presses[1:], strict=False))
+  assert all(b[0] - a[0] >= .5 for a, b in zip(presses, presses[1:], strict=False))
 
 
 def test_no_second_press_without_acknowledgement():
@@ -208,3 +208,20 @@ def test_long_reduction_stops_at_minimum_and_restores_exactly():
       settings.append(set_speed)
   assert min(settings) == 25
   assert max(settings) == settings[-1] == 65
+
+
+def test_curve_uses_far_model_samples():
+  frame = model(False)
+  frame.orientationRate.t = [10. * (i / 32) ** 2 for i in range(33)]
+  frame.orientationRate.z = [.15 if t >= 6. else 0. for t in frame.orientationRate.t]
+  frame.velocity.x = [60 * MPH] * 33
+  curve = measure_curve(frame)
+  assert curve is not None and 6. <= curve.first_horizon_s <= 10.
+
+
+def test_faster_step_still_requires_ack():
+  controller = AcknowledgedCurveSpeed()
+  _, presses = drive(controller, secs=1, curved_until=1, acknowledge=False)
+  sent_at, _ = presses[0]
+  assert recovery_update(controller, sent_at + .51, 65, turn=True) is None
+  assert recovery_update(controller, sent_at + .52, 64, turn=True) == "SET-"

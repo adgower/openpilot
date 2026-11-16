@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import math
 
 MPH = 0.44704
+MODEL_PREVIEW_SECONDS = 10.
+MIN_PRESS_INTERVAL = .5
 
 
 @dataclass(frozen=True)
@@ -16,7 +18,7 @@ class Curve:
 
 
 def measure_curve(model):
-    """Look for a same-direction bend in the next five seconds."""
+    """Look for a same-direction bend over the full model prediction."""
     orientation = model.orientationRate
     times = list(orientation.t)
     yaw = list(orientation.z)
@@ -35,7 +37,7 @@ def measure_curve(model):
     yaw.append(0.)
     velocity.append(0.)
     for t, rate, speed in zip(times, yaw, velocity, strict=True):
-        curvature = rate / speed if .6 <= t <= 5. and speed >= 5. and math.isfinite(rate) and math.isfinite(speed) else 0.
+        curvature = rate / speed if .6 <= t <= MODEL_PREVIEW_SECONDS and speed >= 5. and math.isfinite(rate) and math.isfinite(speed) else 0.
         sign = (1 if curvature > 0. else -1) if abs(curvature) >= .0009 else 0
         if sign != direction:
             if len(run) >= 4 and previous - first >= .65:
@@ -155,7 +157,7 @@ class BranchContext:
 
 
 class VirtualSetSpeed:
-    """Shadow cluster with a one-press-per-0.75s, one unit per press assumption."""
+    """Shadow cluster with a one-unit-per-press assumption."""
 
     def __init__(self, metric=False, min_set_mph=0.):
         self.min_set_mph = min_set_mph
@@ -240,7 +242,7 @@ class VirtualSetSpeed:
         if not self.curve_active and not trigger and now - self.clear_since >= 1.5:
             target = ceiling
         step = None
-        if now - self.last_step >= .75:
+        if now - self.last_step >= MIN_PRESS_INTERVAL:
             if self.value - target >= self.step_mph:
                 if speed_mph <= target:
                     return raw, self.value, None, 'already-at-target'
@@ -260,7 +262,6 @@ class VirtualSetSpeed:
 # acknowledge our last request, so keep the driver ceiling independent.
 class AcknowledgedCurveSpeed:
     ACK_TIMEOUT = 1.0
-    MIN_PRESS_INTERVAL = 1.0
     SPEED_TOLERANCE = 0.2
     RECOVERY_CLEAR_DWELL = 1.5
 
@@ -357,7 +358,7 @@ class AcknowledgedCurveSpeed:
         if pause_for_driver:
             self.virtual.reset()
             self.virtual.value = self.observed
-        if now < self.override_until or model is None or now - self.last_press < self.MIN_PRESS_INTERVAL:
+        if now < self.override_until or model is None or now - self.last_press < MIN_PRESS_INTERVAL:
             return None
         blocked = branch_blocked or corridor_veto(model, traces) or len(model.laneLineProbs) < 3 or min(model.laneLineProbs[1], model.laneLineProbs[2]) < .55
         if self.recovering:
