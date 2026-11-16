@@ -23,7 +23,7 @@ def model(curved, *, ramp=False):
 def drive(controller, *, secs=8, curved_until=4, acknowledge=True):
   ceiling = 65
   presses = []
-  for i in range(secs * 20):
+  for i in range(round(secs * 20)):
     now = i / 20
     action = controller.update(now, engaged=True, valid=True, manual=False, override=False,
                                set_speed=ceiling, speed=63, accel=0, model=model(now < curved_until))
@@ -42,14 +42,16 @@ def test_slow_and_restore_only_after_exit():
   assert len(up) == len(down)
   assert min(up) >= 13.5
   assert ceiling == 65
-  assert all(b[0] - a[0] >= (.35 if b[1] == "SET-" else .5) for a, b in zip(presses, presses[1:], strict=False))
-  assert min(b - a for a, b in zip(down, down[1:], strict=False)) < .5
+  assert all(b[0] - a[0] >= (.25 if b[1] == "SET-" else .35) for a, b in zip(presses, presses[1:], strict=False))
+  assert min(b - a for a, b in zip(down, down[1:], strict=False)) < .35
+  assert min(b - a for a, b in zip(up, up[1:], strict=False)) < .5
 
 
-def test_no_second_press_without_acknowledgement():
+def test_no_new_target_and_only_one_retry_without_acknowledgement():
   controller = AcknowledgedCurveSpeed()
   _, presses = drive(controller, curved_until=8, acknowledge=False)
-  assert len(presses) == 1 and presses[0][1] == "SET-"
+  assert [button for _, button in presses] == ["SET-", "SET-"]
+  assert presses[1][0] - presses[0][0] >= 1.35
   assert controller.fault
 
 
@@ -123,7 +125,7 @@ def test_missing_ack_during_steering_pause_still_faults():
 
 def missed_second_reduction():
   controller = AcknowledgedCurveSpeed()
-  final, presses = drive(controller, secs=1, curved_until=1)
+  final, presses = drive(controller, secs=.85, curved_until=1)
   assert final == 64
   assert [action for _, action in presses] == ["SET-"]
   assert recovery_update(controller, 1.71, 64, turn=True) == "SET-"
@@ -152,6 +154,7 @@ def test_missed_reduction_restores_only_acknowledged_step_after_clear():
 def test_recovery_stops_on_uncertain_set_speed_or_driver_intervention(interrupt):
   controller, sent_at = missed_second_reduction()
   assert recovery_update(controller, sent_at + 1.01, 64, turn=True) is None
+  assert recovery_update(controller, 3.6, 64) is None
   assert recovery_update(controller, 4., 64) is None
   if interrupt == "missed_restore":
     assert recovery_update(controller, 5.51, 64) == "SET+"
@@ -165,8 +168,8 @@ def test_recovery_stops_on_uncertain_set_speed_or_driver_intervention(interrupt)
 
 def test_nonsteering_override_cannot_rebase_below_original_ceiling():
   controller = AcknowledgedCurveSpeed()
-  assert drive(controller, secs=1, curved_until=1)[0] == 64
-  assert recovery_update(controller, .9, 64, turn=True) is None
+  assert drive(controller, secs=.85, curved_until=1)[0] == 64
+  assert recovery_update(controller, .85, 64, turn=True) is None
   assert controller.update(1.1, engaged=True, valid=True, manual=False, override=True,
                            set_speed=64, speed=63, accel=0, model=model(True)) is None
   for i in range(200):
@@ -181,8 +184,8 @@ def test_nonsteering_override_cannot_rebase_below_original_ceiling():
 
 def test_lane_change_pauses_and_restores_known_original_ceiling():
   controller = AcknowledgedCurveSpeed()
-  assert drive(controller, secs=1, curved_until=1)[0] == 64
-  assert recovery_update(controller, .9, 64, turn=True) is None
+  assert drive(controller, secs=.85, curved_until=1)[0] == 64
+  assert recovery_update(controller, .85, 64, turn=True) is None
   for now in (1.1, 1.8, 2.2):
     assert controller.update(now, engaged=True, valid=True, manual=False, override=False, lane_change=True,
                              set_speed=64, speed=62, accel=0, model=model(False)) is None
@@ -250,3 +253,25 @@ def test_comfort_does_not_start_reduction_without_reference_curve_demand():
   for i in range(20):
     _, _, button, _ = controller.update(i * .1, 60., curve, True, False, False, speed_mph=60., accel_mps2=0., comfort_mph=53.)
     assert button is None
+
+def test_late_ack_during_retry_grace_is_consumed_without_duplicate():
+  controller = AcknowledgedCurveSpeed()
+  _, presses = drive(controller, secs=1, curved_until=1, acknowledge=False)
+  sent_at, _ = presses[0]
+  assert recovery_update(controller, sent_at + 1.05, 65, turn=True) is None
+  assert recovery_update(controller, sent_at + 1.10, 64, turn=True) == "SET-"
+  assert controller.observed == 64
+  assert controller.pending == 63
+  assert not controller.retries
+
+
+def test_last_restore_mph_cannot_be_retried():
+  controller = AcknowledgedCurveSpeed()
+  controller.ceiling = 75
+  controller.observed = 74
+  controller.recovering = True
+  assert recovery_update(controller, 0., 74) is None
+  assert recovery_update(controller, 1.5, 74) == "SET+"
+  assert controller.pending == 75
+  assert recovery_update(controller, 2.51, 74) is None
+  assert controller.fault

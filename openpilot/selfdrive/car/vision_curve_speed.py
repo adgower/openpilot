@@ -6,8 +6,8 @@ import math
 
 MPH = 0.44704
 MODEL_PREVIEW_SECONDS = 10.
-SET_MINUS_INTERVAL = .35
-SET_PLUS_INTERVAL = .5
+SET_MINUS_INTERVAL = .25
+SET_PLUS_INTERVAL = .35
 COMFORT_LATERAL_ACCEL = 1.5
 COMFORT_APPROACH_DECEL = .7
 COMFORT_RESPONSE_TIME = 1.5
@@ -287,6 +287,8 @@ class VirtualSetSpeed:
 # acknowledge our last request, so keep the driver ceiling independent.
 class AcknowledgedCurveSpeed:
     ACK_TIMEOUT = 1.0
+    RETRY_GRACE = .35
+    RETRY_WINDOW = .45
     SPEED_TOLERANCE = 0.2
     RECOVERY_CLEAR_DWELL = 1.5
 
@@ -302,6 +304,10 @@ class AcknowledgedCurveSpeed:
         self.fault = False
         self.recovering = False
         self.recovery_clear_since = None
+        self.retries = set()
+        self.pending_retried = False
+        self.pending_interrupted = False
+        self.retry_quiet_until = -math.inf
 
     def reset(self, *, preserve_branch=False):
         self.virtual.reset()
@@ -310,15 +316,19 @@ class AcknowledgedCurveSpeed:
         if not preserve_branch:
             self.branch = BranchContext()
         self.ceiling = self.observed = self.pending = None
+        self.pending_retried = False
+        self.pending_interrupted = False
+        self.retry_quiet_until = -math.inf
 
     def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model, steering_only=False, lane_change=False, comfort_hint_s=None):
         # Release the fault only on confirmed disengagement, not on stale data.
         if valid and not engaged:
             self.fault = False
+            self.retries.clear()
             self.reset()
             return None
         if not valid:
-            self.fault |= self.pending is not None or (self.ceiling is not None and self.observed < self.ceiling)
+            self.fault |= self.pending is not None or now < self.retry_quiet_until or (self.ceiling is not None and self.observed < self.ceiling)
             self.reset()
             return None
         branch_blocked = False
@@ -335,36 +345,60 @@ class AcknowledgedCurveSpeed:
             reduced = self.ceiling is not None and self.observed < self.ceiling - self.SPEED_TOLERANCE
             # A pedal override releases automation without
             # allowing another reduction from an already-lowered setpoint.
-            self.fault |= self.pending is not None or self.recovering or (override and not manual and reduced)
+            self.fault |= self.pending is not None or now < self.retry_quiet_until or self.recovering or (override and not manual and reduced)
             self.reset(preserve_branch=True)
             return None
         if self.fault:
             return None
         pause_for_driver = steering_only or lane_change
         if pause_for_driver:
+            self.pending_interrupted |= self.pending is not None
             self.override_until = max(self.override_until, now + 1.5)
             self.recovery_clear_since = None
-        if self.pending is not None:
-            if now - self.pending_at >= self.ACK_TIMEOUT:
-                # Recover only a confirmed reduction. Never repeat the timed-out press.
-                if (not self.recovering and self.pending < self.observed < self.ceiling
-                        and abs(set_speed - self.observed) <= self.SPEED_TOLERANCE):
-                    self.pending = None
-                    self.recovering = True
-                    self.virtual.reset()
-                    return None
+        if now < self.retry_quiet_until:
+            if abs(set_speed - self.observed) > self.SPEED_TOLERANCE:
                 self.fault = True
                 self.reset()
-                return None
+            return None
+
+        retry = None
+        if self.pending is not None:
+            age = now - self.pending_at
             if abs(set_speed - self.pending) <= self.SPEED_TOLERANCE:
                 self.observed = set_speed
                 self.pending = None
+                if self.pending_retried:
+                    self.pending_retried = False
+                    self.retry_quiet_until = now + self.ACK_TIMEOUT
+                    return None
             elif abs(set_speed - self.observed) > self.SPEED_TOLERANCE:
                 self.fault = True
                 self.reset()
                 return None
-            else:
+            elif age < self.ACK_TIMEOUT:
                 return None
+            else:
+                direction = "SET-" if self.pending < self.observed else "SET+"
+                # Retain a step of headroom in case both presses are applied.
+                headroom = self.pending > 25 if direction == "SET-" else self.pending < self.ceiling
+                retry_allowed = (not self.pending_retried and not self.pending_interrupted
+                                 and direction not in self.retries and headroom
+                                 and now >= self.override_until
+                                 and age <= self.ACK_TIMEOUT + self.RETRY_GRACE + self.RETRY_WINDOW)
+                if retry_allowed:
+                    if age < self.ACK_TIMEOUT + self.RETRY_GRACE or model is None:
+                        return None
+                    retry = direction
+                else:
+                    if (not self.recovering and self.pending < self.observed < self.ceiling):
+                        self.pending = None
+                        self.pending_retried = False
+                        self.recovering = True
+                        self.virtual.reset()
+                        return None
+                    self.fault = True
+                    self.reset()
+                    return None
         if self.recovering:
             if abs(set_speed - self.observed) > self.SPEED_TOLERANCE:
                 self.fault = True
@@ -389,6 +423,12 @@ class AcknowledgedCurveSpeed:
         blocked = branch_blocked or corridor_veto(model, traces) or len(model.laneLineProbs) < 3 or min(model.laneLineProbs[1], model.laneLineProbs[2]) < .55
         comfort_mph = (comfort_approach_mph(model, curve, speed, comfort_hint_s)
                        if curve is not None and comfort_hint_s is not None and not blocked else None)
+        if retry is not None:
+            self.virtual.value = self.observed
+            if retry == "SET-":
+                demand = comfort_mph if comfort_mph is not None else math.sqrt(1.8 / curve.curvature) / MPH if curve else self.ceiling
+                if self.pending - 1 < max(25., demand):
+                    return None
         if self.recovering:
             curve_demand = curve is not None and self.ceiling - math.sqrt(1.8 / curve.curvature) / MPH >= 2.
             if blocked or curve_demand:
@@ -400,10 +440,20 @@ class AcknowledgedCurveSpeed:
                 return None
             target, step = min(round(self.observed) + 1, self.ceiling), "SET+"
         else:
+            previous_step = self.virtual.last_step
             _, target, step, _ = self.virtual.update(now, self.ceiling, curve, True, blocked, False,
                                                     speed_mph=speed, accel_mps2=accel, comfort_mph=comfort_mph,
                                                     last_press_at=self.last_press)
+        if retry is not None and (step != retry or target != self.pending):
+            if not self.recovering:
+                self.virtual.last_step = previous_step
+            self.virtual.value = self.observed
+            return None
         if step is not None:
+            if retry is not None:
+                self.retries.add(retry)
+                self.pending_retried = True
+            self.pending_interrupted = False
             self.pending = target
             self.pending_at = self.last_press = now
         return step
