@@ -237,9 +237,9 @@ class Car:
     can_rcv_valid = len(can_strs) > 0
     self.pilot_state_valid = bool(can_rcv_valid and CS.canValid)
     if can_rcv_valid:
-      self.pilot_state_ns = messaging.log_from_bytes(can_strs[-1]).logMonoTime
+      self.pilot_state_ns = can_list[-1][0]
     if self.tracking_trial is not None and can_rcv_valid:
-      self.tracking_state_ns = messaging.log_from_bytes(can_strs[-1]).logMonoTime
+      self.tracking_state_ns = can_list[-1][0]
 
 
     # Check for CAN timeout
@@ -247,7 +247,7 @@ class Car:
       self.can_rcv_cum_timeout_counter += 1
 
     if can_rcv_valid and REPLAY:
-      self.can_log_mono_time = messaging.log_from_bytes(can_strs[0]).logMonoTime
+      self.can_log_mono_time = can_list[0][0]
 
     self.v_cruise_helper.update_v_cruise(CS, self.sm['carControl'].enabled, self.is_metric)
     if self.sm['carControl'].enabled and not self.CC_prev.enabled:

@@ -16,9 +16,9 @@ class VisionCurveContext:
   def __init__(self):
     self.cruise = AcknowledgedCurveSpeed()
     self.model_ns = 0
+    self.lane_changing = True
 
   def update(self, now_ns, sm, parser, state, control, metric):
-    model = sm["modelV2"]
     model_ns = sm.logMonoTime["modelV2"]
     fresh_model = sm.valid["modelV2"] and 0 <= now_ns - model_ns <= 200_000_000
     fresh_control = sm.valid["carControl"] and 0 <= now_ns - sm.logMonoTime["carControl"] <= 200_000_000
@@ -34,10 +34,15 @@ class VisionCurveContext:
     engaged = control.enabled and control.latActive and stock.enabled and not control.longActive
     manual = (control.cruiseControl.cancel or control.cruiseControl.resume or
               any(switches.get(name) or any(switch_samples.get(name, ())) for name in BUTTON_MASKS))
+    new_model = None
+    if model_ns != self.model_ns:
+      self.model_ns = model_ns
+      model = sm["modelV2"]
+      self.lane_changing = str(model.meta.laneChangeState) != "off"
+      if fresh_model:
+        new_model = model
     override = (state.steeringPressed or state.gasPressed or state.brakePressed or state.leftBlinker or state.rightBlinker or
-                str(model.meta.laneChangeState) != "off")
-    new_model = model if fresh_model and model_ns != self.model_ns else None
-    self.model_ns = model_ns
+                self.lane_changing)
     # Drop pending authority on model loss while engaged. A clean
     # disengagement clears the session even if the model is unavailable.
     valid &= not engaged or (fresh_model and not stock.nonAdaptive and str(state.gearShifter) == "drive" and 25 <= set_speed <= 95)
