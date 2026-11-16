@@ -1,9 +1,8 @@
-"""Replay-only candidate. No CAN, Params, vehicle connection or control stack imports."""
+"""Vision curve geometry and acknowledged OEM cruise setpoint decisions."""
+from bisect import bisect_right
 from collections import deque
 from dataclasses import dataclass
 import math
-
-import numpy as np
 
 MPH = 0.44704
 MAX_REDUCTION_MPH = 5.
@@ -19,26 +18,43 @@ class Curve:
 
 def measure_curve(model):
     """Look for a same-direction bend in the next five seconds."""
-    t = np.asarray(model.orientationRate.t)
-    yaw = np.asarray(model.orientationRate.z)
-    velocity = np.asarray(model.velocity.x)
-    if not (t.shape == yaw.shape == velocity.shape) or len(t) < 6:
+    orientation = model.orientationRate
+    times = list(orientation.t)
+    yaw = list(orientation.z)
+    velocity = list(model.velocity.x)
+    if not (len(times) == len(yaw) == len(velocity)) or len(times) < 6:
         return None
-    mask = (t >= 0.6) & (t <= 5.0) & (velocity >= 5) & np.isfinite(yaw) & np.isfinite(velocity)
-    # A rejected/missing horizon sample cannot form a continuous run.
-    curv = np.divide(yaw, velocity, out=np.zeros_like(yaw, dtype=float), where=mask)
-    strong = mask & (np.abs(curv) >= 0.0009)
+
     best = None
     probs = model.laneLineProbs
     confidence = min(probs[1], probs[2]) if len(probs) >= 3 else 0.
-    # Require at least four contiguous samples and 0.65 seconds of horizon support.
-    edges = np.r_[0, np.flatnonzero((strong[1:] != strong[:-1]) | (np.sign(curv[1:]) != np.sign(curv[:-1]))) + 1, len(t)]
-    for first, stop in zip(edges[:-1], edges[1:], strict=True):
-        if not strong[first] or stop - first < 4 or t[stop - 1] - t[first] < .65:
-            continue
-        magnitude = float(np.quantile(np.abs(curv[first:stop]), .8))
-        if best is None or magnitude > best.curvature:
-            best = Curve(magnitude, int(np.sign(curv[first])), float(t[first]), float(confidence))
+    run = []
+    direction = 0
+    first = previous = 0.
+    # A neutral sentinel closes a run at the end of the input.
+    times.append(math.inf)
+    yaw.append(0.)
+    velocity.append(0.)
+    for t, rate, speed in zip(times, yaw, velocity, strict=True):
+        curvature = rate / speed if .6 <= t <= 5. and speed >= 5. and math.isfinite(rate) and math.isfinite(speed) else 0.
+        sign = (1 if curvature > 0. else -1) if abs(curvature) >= .0009 else 0
+        if sign != direction:
+            if len(run) >= 4 and previous - first >= .65:
+                run.sort()
+                index = .8 * (len(run) - 1)
+                lower = int(index)
+                fraction = index - lower
+                lo, hi = run[lower], run[lower + 1]
+                spread = hi - lo
+                magnitude = lo + spread * fraction if fraction < .5 else hi - spread * (1. - fraction)
+                if best is None or magnitude > best.curvature:
+                    best = Curve(magnitude, direction, first, confidence)
+            run.clear()
+            first = t
+            direction = sign
+        if sign:
+            run.append(abs(curvature))
+        previous = t
     return best
 
 
@@ -46,11 +62,29 @@ def _corridor_traces(model):
     lines = model.laneLines
     if len(lines) < 3:
         return ()
-    traces = tuple((np.asarray(line.x), np.asarray(line.y)) for line in (model.position, lines[1], lines[2]))
-    if any(len(x) < 4 or x.shape != y.shape or not np.isfinite(x).all() or not np.isfinite(y).all()
-           or (np.diff(x) < 0).any() for x, y in traces):
-        return ()
+    traces = []
+    for line in (model.position, lines[1], lines[2]):
+        xs, ys = list(line.x), list(line.y)
+        if len(xs) < 4 or len(xs) != len(ys):
+            return ()
+        previous = -math.inf
+        for x, y in zip(xs, ys, strict=True):
+            if x < previous or not (math.isfinite(x) and math.isfinite(y)):
+                return ()
+            previous = x
+        traces.append((xs, ys))
     return traces
+
+
+def _interp(at, trace):
+    xs, ys = trace
+    right = bisect_right(xs, at)
+    if right == 0:
+        return ys[0]
+    if right == len(xs) or xs[right - 1] == at:
+        return ys[right - 1]
+    left = right - 1
+    return (ys[right] - ys[left]) / (xs[right] - xs[left]) * (at - xs[left]) + ys[left]
 
 
 def corridor_veto(model, traces=None):
@@ -58,21 +92,23 @@ def corridor_veto(model, traces=None):
     traces = _corridor_traces(model) if traces is None else traces
     if not traces:
         return 'corridor_unavailable'
-    near = max(15., *(float(x[0]) for x, _ in traces))
-    far = min(85., *(float(x[-1]) for x, _ in traces))
+    near = max(15., *(x[0] for x, _ in traces))
+    far = min(85., *(x[-1] for x, _ in traces))
     if far - near < 40.:
         return 'corridor_unavailable'
 
-    at = np.linspace(near, far, 7)
-    path, left, right = (np.interp(at, x, y) for x, y in traces)
-    width = right - left
-    if (width < 2.1).any() or (width > 5.2).any():
-        return 'corridor_width'
-    offset = np.abs(path - (left + right) / 2.)
-    departed = offset > np.maximum(1., .38 * width)
-    if np.any(departed[:-1] & departed[1:]):
-        return 'corridor_departure'
-    return None
+    spacing = (far - near) / 6.
+    departed = previous = False
+    for i in range(7):
+        at = far if i == 6 else near + i * spacing
+        path, left, right = (_interp(at, trace) for trace in traces)
+        width = right - left
+        if not 2.1 <= width <= 5.2:
+            return 'corridor_width'
+        outside = abs(path - (left + right) / 2.) > max(1., .38 * width)
+        departed |= previous and outside
+        previous = outside
+    return 'corridor_departure' if departed else None
 
 
 class BranchContext:
@@ -94,8 +130,8 @@ class BranchContext:
         probs = model.laneLineProbs
         reliable = traces and len(probs) >= 3 and min(probs[1], probs[2]) >= .55
         if reliable and max(x[0] for x, _ in traces) <= 55. and min(x[-1] for x, _ in traces) >= 85.:
-            _, left, right = (np.interp([55., 85.], x, y) for x, y in traces)
-            if np.max(right - left) >= 3.75:
+            _, left, right = traces
+            if max(_interp(at, right) - _interp(at, left) for at in (55., 85.)) >= 3.75:
                 if now - self.last_wide_at > .15:
                     self.widening_since = now
                 self.last_wide_at = now
@@ -103,7 +139,7 @@ class BranchContext:
                     self.widened_at = now
             if (curve is not None and now - self.widened_at <= 6. and min(x[-1] for x, _ in traces) >= 120.
                     and max(value for _, value in self.set_history) - ceiling >= 5.):
-                path, left, right = (np.interp(120., x, y) for x, y in traces)
+                path, left, right = (_interp(120., trace) for trace in traces)
                 offset = path - (left + right) / 2.
                 edges = model.roadEdgeStds
                 if len(edges) >= 2:
