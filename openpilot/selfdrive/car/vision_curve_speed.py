@@ -7,6 +7,29 @@ import math
 MPH = 0.44704
 MODEL_PREVIEW_SECONDS = 10.
 MIN_PRESS_INTERVAL = .5
+COMFORT_LATERAL_ACCEL = 1.5
+COMFORT_APPROACH_DECEL = .7
+COMFORT_RESPONSE_TIME = 1.5
+
+
+def comfort_approach_mph(model, curve, speed_mph, hint_s):
+    """Use upcoming curvature to estimate an approach speed for OEM cruise."""
+    speed = speed_mph * MPH
+    bound = math.inf
+    for t, rate, velocity in zip(model.orientationRate.t, model.orientationRate.z, model.velocity.x, strict=True):
+        if t < curve.first_horizon_s:
+            continue
+        if t > MODEL_PREVIEW_SECONDS or not (math.isfinite(rate) and velocity >= 5.):
+            break
+        curvature = curve.direction * rate / velocity
+        if curvature < .0009:
+            break
+        time_to_slow = max(0., t - COMFORT_RESPONSE_TIME - hint_s)
+        curve_speed_sq = COMFORT_LATERAL_ACCEL / min(curvature, curve.curvature)
+        bound = min(bound, curve_speed_sq + 2. * COMFORT_APPROACH_DECEL * speed * time_to_slow)
+    # Retain the reference admission timing. Comfort can lower its target.
+    reference_mph = math.sqrt(1.8 / curve.curvature) / MPH
+    return min(reference_mph, math.sqrt(bound) / MPH)
 
 
 @dataclass(frozen=True)
@@ -193,7 +216,7 @@ class VirtualSetSpeed:
         return predicted_decrease > 0. and speed_mph - predicted_decrease / MPH <= target
 
     def update(self, now, ceiling, curve, eligible, inhibit, manual, *, speed_mph, accel_mps2,
-               manual_observed_at=-math.inf, override_observed_at=-math.inf):
+               manual_observed_at=-math.inf, override_observed_at=-math.inf, comfort_mph=None):
         # Consume observations before checking eligibility. A release or brief
         # driver input during missing model samples persists into re-admission.
         self.manual_until = max(self.manual_until, manual_observed_at + 4.)
@@ -212,7 +235,8 @@ class VirtualSetSpeed:
             self.detect_since = self.clear_since = None
             self.curve_active = False
         self.value = min(self.value, ceiling)
-        raw = ceiling if curve is None else min(ceiling, math.sqrt(1.8 / curve.curvature) / MPH)
+        reference = ceiling if curve is None else min(ceiling, math.sqrt(1.8 / curve.curvature) / MPH)
+        raw = reference if comfort_mph is None else min(reference, comfort_mph)
         # Keep the curve target between the minimum set speed and the driver ceiling.
         proposal = min(ceiling, max(self.min_set_mph, raw))
         if inhibit or now < self.manual_until or now < self.override_until:
@@ -224,7 +248,7 @@ class VirtualSetSpeed:
             return raw, self.value, None, mode
         already_slowing_enough = self._decel_reaches_target(
             now, speed_mph, accel_mps2, proposal, curve.first_horizon_s if curve is not None else 0.)
-        trigger = curve is not None and ceiling - proposal >= 2.
+        trigger = curve is not None and ceiling - max(self.min_set_mph, reference) >= 2.
         if trigger:
             if self.detect_since is None or curve.direction != self.previous_direction:
                 self.detect_since = now
@@ -286,7 +310,7 @@ class AcknowledgedCurveSpeed:
             self.branch = BranchContext()
         self.ceiling = self.observed = self.pending = None
 
-    def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model, steering_only=False, lane_change=False):
+    def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model, steering_only=False, lane_change=False, comfort_hint_s=None):
         # Release the fault only on confirmed disengagement, not on stale data.
         if valid and not engaged:
             self.fault = False
@@ -361,6 +385,8 @@ class AcknowledgedCurveSpeed:
         if now < self.override_until or model is None or now - self.last_press < MIN_PRESS_INTERVAL:
             return None
         blocked = branch_blocked or corridor_veto(model, traces) or len(model.laneLineProbs) < 3 or min(model.laneLineProbs[1], model.laneLineProbs[2]) < .55
+        comfort_mph = (comfort_approach_mph(model, curve, speed, comfort_hint_s)
+                       if curve is not None and comfort_hint_s is not None and not blocked else None)
         if self.recovering:
             curve_demand = curve is not None and self.ceiling - math.sqrt(1.8 / curve.curvature) / MPH >= 2.
             if blocked or curve_demand:
@@ -373,7 +399,7 @@ class AcknowledgedCurveSpeed:
             target, step = min(round(self.observed) + 1, self.ceiling), "SET+"
         else:
             _, target, step, _ = self.virtual.update(now, self.ceiling, curve, True, blocked, False,
-                                                    speed_mph=speed, accel_mps2=accel)
+                                                    speed_mph=speed, accel_mps2=accel, comfort_mph=comfort_mph)
         if step is not None:
             self.pending = target
             self.pending_at = self.last_press = now

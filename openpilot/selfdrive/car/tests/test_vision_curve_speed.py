@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from openpilot.selfdrive.car.vision_curve_speed import AcknowledgedCurveSpeed, MPH, measure_curve
+from openpilot.selfdrive.car.vision_curve_speed import AcknowledgedCurveSpeed, Curve, MPH, comfort_approach_mph, measure_curve
 
 
 def model(curved, *, ramp=False):
@@ -225,3 +225,27 @@ def test_faster_step_still_requires_ack():
   sent_at, _ = presses[0]
   assert recovery_update(controller, sent_at + .51, 65, turn=True) is None
   assert recovery_update(controller, sent_at + .52, 64, turn=True) == "SET-"
+
+def test_comfort_preserves_reference_approach_and_lowers_tight_bend_target():
+  m = model(True)
+  curve = measure_curve(m)
+  reference = (1.8 / curve.curvature) ** .5 / MPH
+  comfort = comfort_approach_mph(m, curve, 60, 0.)
+  assert comfort < reference
+  m.orientationRate.t = [t + 6. for t in m.orientationRate.t]
+  far_curve = measure_curve(m)
+  assert comfort_approach_mph(m, far_curve, 60, 0.) == pytest.approx(reference)
+
+
+def test_slowdown_forecast_can_advance_comfort_target():
+  m = model(True)
+  m.orientationRate.z[:8] = [0.] * 8
+  curve = measure_curve(m)
+  assert comfort_approach_mph(m, curve, 60, 2.) < comfort_approach_mph(m, curve, 60, 0.)
+
+def test_comfort_does_not_start_reduction_without_reference_curve_demand():
+  controller = AcknowledgedCurveSpeed().virtual
+  curve = Curve(1.8 / (60 * MPH) ** 2, 1, 2., .9)
+  for i in range(20):
+    _, _, button, _ = controller.update(i * .1, 60., curve, True, False, False, speed_mph=60., accel_mps2=0., comfort_mph=53.)
+    assert button is None

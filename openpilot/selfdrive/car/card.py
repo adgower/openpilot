@@ -70,7 +70,7 @@ class Car:
     self.pilot_state_ns = 0
     self.pilot_state_valid = False
     self.can_sock = messaging.sub_sock('can', timeout=20)
-    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents', 'modelV2', 'deviceMotion', 'extrinsicsCalibration'])
+    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents', 'modelV2', 'deviceMotion', 'extrinsicsCalibration', 'radarState'])
     self.pm = messaging.PubMaster(['sendcan', 'carState', 'carParams', 'carOutput', 'radarTracks'])
 
     self.can_rcv_cum_timeout_counter = 0
@@ -177,7 +177,7 @@ class Car:
       if supported(self.CP):
         from opendbc.car.ford.values import FordSafetyFlags
         self.CP.safetyConfigs[-1].safetyParam |= FordSafetyFlags.VISION_CURVE_SPEED.value
-        self.vision_curve = VisionCurveContext()
+        self.vision_curve = VisionCurveContext(comfort=True)
         self.CI.CC.vision_curve_enabled = True
 
     if self.CP.secOcRequired:
