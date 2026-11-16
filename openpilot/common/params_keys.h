@@ -33,6 +33,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"DisablePowerDown", {PERSISTENT, BOOL}},
     {"DisableUpdates", {PERSISTENT, BOOL}},
     {"FordPrefSteerAngleCurvature", {PERSISTENT, BOOL, "0"}},
+    {"FordPrefVisionCurveSpeed", {PERSISTENT, BOOL, "0"}},
     {"FordPrefHighSpeedTracking", {PERSISTENT, BOOL, "0"}},
     {"FordPrefRollAwareMapping", {PERSISTENT, BOOL, "0"}},
     {"FordPrefPersistentTracking", {PERSISTENT, BOOL, "0"}},

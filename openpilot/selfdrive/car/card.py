@@ -171,6 +171,15 @@ class Car:
       safety_config.safetyModel = structs.CarParams.SafetyModel.noOutput
       self.CP.safetyConfigs = [safety_config]
 
+    self.vision_curve = None
+    if live_hardware and controller_available and self.params.get_bool("FordPrefVisionCurveSpeed"):
+      from openpilot.selfdrive.car.vision_curve_context import VisionCurveContext, supported
+      if supported(self.CP):
+        from opendbc.car.ford.values import FordSafetyFlags
+        self.CP.safetyConfigs[-1].safetyParam |= FordSafetyFlags.VISION_CURVE_SPEED.value
+        self.vision_curve = VisionCurveContext()
+        self.CI.CC.vision_curve_enabled = True
+
     if self.CP.secOcRequired:
       # Copy user key if available
       try:
@@ -323,6 +332,9 @@ class Car:
                                 speed_ns=speed_sample_ns(self.CI.can_parsers['pt']))
       if getattr(self, 'prediction_pilot', None) is not None:
         self.prediction_pilot.feed(state_ns=self.pilot_state_ns, state_valid=self.pilot_state_valid)
+      if getattr(self, "vision_curve", None) is not None:
+        parser = self.CI.can_parsers["pt"]
+        self.CI.CC.vision_curve_button = self.vision_curve.update(now_nanos, self.sm, parser, CS, CC, self.is_metric)
       self.last_actuators_output, can_sends = self.CI.apply(CC, now_nanos)
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
 

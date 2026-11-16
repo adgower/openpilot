@@ -22,11 +22,12 @@ class DrivingLayoutMici(NavScroller):
     self._navigator_toggles = {}
     for key, title, subtitle in (
       ("FordPrefSteerAngleCurvature", "use pinion\nyaw sensor", "offroad only"),
+      ("FordPrefVisionCurveSpeed", "vision curve\nspeed", "OEM ACC • mph only"),
       ("FordPrefLowSpeedGain", "navigator\nlow-speed trial", "requires pinion"),
     ):
       item = BigToggle(title, subtitle, initial_state=ui_state.params.get_bool(key),
                        toggle_callback=lambda state, param=key: self._on_navigator_toggle(state, param))
-      item.set_enabled(self._navigator_supported)
+      item.set_enabled(lambda param=key: self._navigator_toggle_supported(param))
       self._navigator_toggles[key] = item
     self._initial_cruise_speed = InitialCruiseSpeedButton()
     self._initial_cruise_speed.set_visible(lambda: ui_state.CP is not None and ui_state.has_longitudinal_control and not ui_state.CP.pcmCruise)
@@ -94,8 +95,11 @@ class DrivingLayoutMici(NavScroller):
     return (not ui_state.started and cp is not None and cp.brand == "ford" and
             cp.carFingerprint == "LINCOLN_NAVIGATOR_MK4" and bool(cp.flags & 1))
 
+  def _navigator_toggle_supported(self, key):
+    return self._navigator_supported() and (key != "FordPrefVisionCurveSpeed" or not ui_state.CP.openpilotLongitudinalControl)
+
   def _on_navigator_toggle(self, state: bool, key: str):
-    if not self._navigator_supported():
+    if not self._navigator_toggle_supported(key):
       self._navigator_toggles[key].set_checked(ui_state.params.get_bool(key))
       return
     ui_state.params.put_bool(key, state, block=True)
