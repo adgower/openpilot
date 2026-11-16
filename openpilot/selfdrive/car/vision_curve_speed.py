@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import math
 
 MPH = 0.44704
-MAX_REDUCTION_MPH = 5.
 
 
 @dataclass(frozen=True)
@@ -212,8 +211,8 @@ class VirtualSetSpeed:
             self.curve_active = False
         self.value = min(self.value, ceiling)
         raw = ceiling if curve is None else min(ceiling, math.sqrt(1.8 / curve.curvature) / MPH)
-        # Ignore tiny reductions, bound the experiment below the recorded set speed.
-        proposal = min(ceiling, max(self.min_set_mph, ceiling - MAX_REDUCTION_MPH, raw))
+        # Keep the curve target between the minimum set speed and the driver ceiling.
+        proposal = min(ceiling, max(self.min_set_mph, raw))
         if inhibit or now < self.manual_until or now < self.override_until:
             self.motion.clear()
             self.detect_since = self.clear_since = None
@@ -242,7 +241,7 @@ class VirtualSetSpeed:
             target = ceiling
         step = None
         if now - self.last_step >= .75:
-            if self.value - target >= self.step_mph and self.value - self.step_mph >= ceiling - MAX_REDUCTION_MPH:
+            if self.value - target >= self.step_mph:
                 if speed_mph <= target:
                     return raw, self.value, None, 'already-at-target'
                 if already_slowing_enough:
@@ -263,6 +262,7 @@ class AcknowledgedCurveSpeed:
     ACK_TIMEOUT = 1.0
     MIN_PRESS_INTERVAL = 1.0
     SPEED_TOLERANCE = 0.2
+    RECOVERY_CLEAR_DWELL = 1.5
 
     def __init__(self):
         self.virtual = VirtualSetSpeed(min_set_mph=25.)
@@ -274,14 +274,18 @@ class AcknowledgedCurveSpeed:
         self.last_press = -math.inf
         self.override_until = -math.inf
         self.fault = False
+        self.recovering = False
+        self.recovery_clear_since = None
 
     def reset(self, *, preserve_branch=False):
         self.virtual.reset()
+        self.recovering = False
+        self.recovery_clear_since = None
         if not preserve_branch:
             self.branch = BranchContext()
         self.ceiling = self.observed = self.pending = None
 
-    def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model):
+    def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model, steering_only=False, lane_change=False):
         # Release the fault only on confirmed disengagement, not on stale data.
         if valid and not engaged:
             self.fault = False
@@ -302,13 +306,27 @@ class AcknowledgedCurveSpeed:
             branch_blocked = self.branch.update(now, branch_ceiling, model, curve, traces)
         if manual or override:
             self.override_until = max(self.override_until, now + (4.0 if manual else 1.5))
-            self.fault |= self.pending is not None
+            reduced = self.ceiling is not None and self.observed < self.ceiling - self.SPEED_TOLERANCE
+            # A pedal override releases automation without
+            # allowing another reduction from an already-lowered setpoint.
+            self.fault |= self.pending is not None or self.recovering or (override and not manual and reduced)
             self.reset(preserve_branch=True)
             return None
-        if self.fault or now < self.override_until:
+        if self.fault:
             return None
+        pause_for_driver = steering_only or lane_change
+        if pause_for_driver:
+            self.override_until = max(self.override_until, now + 1.5)
+            self.recovery_clear_since = None
         if self.pending is not None:
             if now - self.pending_at >= self.ACK_TIMEOUT:
+                # Recover only a confirmed reduction. Never repeat the timed-out press.
+                if (not self.recovering and self.pending < self.observed < self.ceiling
+                        and abs(set_speed - self.observed) <= self.SPEED_TOLERANCE):
+                    self.pending = None
+                    self.recovering = True
+                    self.virtual.reset()
+                    return None
                 self.fault = True
                 self.reset()
                 return None
@@ -321,6 +339,14 @@ class AcknowledgedCurveSpeed:
                 return None
             else:
                 return None
+        if self.recovering:
+            if abs(set_speed - self.observed) > self.SPEED_TOLERANCE:
+                self.fault = True
+                self.reset()
+                return None
+            if self.ceiling - self.observed <= self.SPEED_TOLERANCE:
+                self.reset(preserve_branch=True)
+                return None
         if self.ceiling is None or abs(set_speed - self.observed) > self.SPEED_TOLERANCE:
             if self.ceiling is not None:
                 self.override_until = now + 4.0
@@ -328,11 +354,25 @@ class AcknowledgedCurveSpeed:
             # The Ford CAN-FD setpoint is reported in whole mph.
             self.ceiling = self.observed = round(set_speed)
             return None
-        if model is None or now - self.last_press < self.MIN_PRESS_INTERVAL:
+        if pause_for_driver:
+            self.virtual.reset()
+            self.virtual.value = self.observed
+        if now < self.override_until or model is None or now - self.last_press < self.MIN_PRESS_INTERVAL:
             return None
         blocked = branch_blocked or corridor_veto(model, traces) or len(model.laneLineProbs) < 3 or min(model.laneLineProbs[1], model.laneLineProbs[2]) < .55
-        _, target, step, _ = self.virtual.update(now, self.ceiling, curve, True, blocked, False,
-                                                speed_mph=speed, accel_mps2=accel)
+        if self.recovering:
+            curve_demand = curve is not None and self.ceiling - math.sqrt(1.8 / curve.curvature) / MPH >= 2.
+            if blocked or curve_demand:
+                self.recovery_clear_since = None
+                return None
+            if self.recovery_clear_since is None:
+                self.recovery_clear_since = now
+            if now - self.recovery_clear_since < self.RECOVERY_CLEAR_DWELL:
+                return None
+            target, step = min(round(self.observed) + 1, self.ceiling), "SET+"
+        else:
+            _, target, step, _ = self.virtual.update(now, self.ceiling, curve, True, blocked, False,
+                                                    speed_mph=speed, accel_mps2=accel)
         if step is not None:
             self.pending = target
             self.pending_at = self.last_press = now

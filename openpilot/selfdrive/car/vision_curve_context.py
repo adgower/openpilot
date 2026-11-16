@@ -41,10 +41,11 @@ class VisionCurveContext:
       self.lane_changing = str(model.meta.laneChangeState) != "off"
       if fresh_model:
         new_model = model
-    override = (state.steeringPressed or state.gasPressed or state.brakePressed or state.leftBlinker or state.rightBlinker or
-                self.lane_changing)
+    override = state.gasPressed or state.brakePressed
+    lane_change = state.leftBlinker or state.rightBlinker or self.lane_changing
     # Drop pending authority on model loss while engaged. A clean
     # disengagement clears the session even if the model is unavailable.
     valid &= not engaged or (fresh_model and not stock.nonAdaptive and str(state.gearShifter) == "drive" and 25 <= set_speed <= 95)
     return self.cruise.update(now_ns / 1e9, engaged=engaged, valid=valid, manual=manual, override=override, set_speed=set_speed,
-                              speed=state.vEgo / MPH, accel=state.aEgo, model=new_model if 25 * MPH <= state.vEgo <= 95 * MPH else None)
+                              speed=state.vEgo / MPH, accel=state.aEgo, steering_only=state.steeringPressed, lane_change=lane_change,
+                              model=new_model if 25 * MPH <= state.vEgo <= 95 * MPH else None)
