@@ -320,15 +320,18 @@ class AcknowledgedCurveSpeed:
         self.pending_interrupted = False
         self.retry_quiet_until = -math.inf
 
-    def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model, steering_only=False, lane_change=False, comfort_hint_s=None):
-        # Release the fault only on confirmed disengagement, not on stale data.
+    def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model, steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None):
+        # An assistance dropout does not end an engaged Ford cruise session.
         if valid and not engaged:
-            self.fault = False
-            self.retries.clear()
+            if not cruise_engaged:
+                self.fault = False
+                self.retries.clear()
+            else:
+                self.fault |= bool(self.retries)
             self.reset()
             return None
         if not valid:
-            self.fault |= self.pending is not None or now < self.retry_quiet_until or (self.ceiling is not None and self.observed < self.ceiling)
+            self.fault |= self.pending is not None or bool(self.retries) or (self.ceiling is not None and self.observed < self.ceiling)
             self.reset()
             return None
         branch_blocked = False
@@ -345,7 +348,7 @@ class AcknowledgedCurveSpeed:
             reduced = self.ceiling is not None and self.observed < self.ceiling - self.SPEED_TOLERANCE
             # A pedal override releases automation without
             # allowing another reduction from an already-lowered setpoint.
-            self.fault |= self.pending is not None or now < self.retry_quiet_until or self.recovering or (override and not manual and reduced)
+            self.fault |= self.pending is not None or bool(self.retries) or self.recovering or (override and not manual and reduced)
             self.reset(preserve_branch=True)
             return None
         if self.fault:
@@ -408,6 +411,10 @@ class AcknowledgedCurveSpeed:
                 self.reset(preserve_branch=True)
                 return None
         if self.ceiling is None or abs(set_speed - self.observed) > self.SPEED_TOLERANCE:
+            if self.retries:
+                self.fault = True
+                self.reset()
+                return None
             if self.ceiling is not None:
                 self.override_until = now + 4.0
             self.reset(preserve_branch=True)
@@ -444,7 +451,13 @@ class AcknowledgedCurveSpeed:
             _, target, step, _ = self.virtual.update(now, self.ceiling, curve, True, blocked, False,
                                                     speed_mph=speed, accel_mps2=accel, comfort_mph=comfort_mph,
                                                     last_press_at=self.last_press)
-        if retry is not None and (step != retry or target != self.pending):
+        # An ACK cannot identify which of the original and retried pulses took
+        # effect. Hold one mph of headroom for each retried direction until
+        # Ford cruise disengages, even after the post-retry observation period.
+        floor = 25 + ("SET-" in self.retries)
+        ceiling = self.ceiling - ("SET+" in self.retries)
+        outside_reserved_bounds = step is not None and not floor <= target <= ceiling
+        if outside_reserved_bounds or (retry is not None and (step != retry or target != self.pending)):
             if not self.recovering:
                 self.virtual.last_step = previous_step
             self.virtual.value = self.observed

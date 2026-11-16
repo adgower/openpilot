@@ -275,3 +275,38 @@ def test_last_restore_mph_cannot_be_retried():
   assert controller.pending == 75
   assert recovery_update(controller, 2.51, 74) is None
   assert controller.fault
+
+
+@pytest.mark.parametrize(("direction", "setpoint", "duplicate"), [("SET+", 74, 75), ("SET-", 26, 25)])
+def test_retry_reserve_survives_quiet_period_and_rejects_late_duplicate(direction, setpoint, duplicate):
+  controller = AcknowledgedCurveSpeed()
+  controller.ceiling = 75
+  controller.observed = setpoint
+  controller.retries.add(direction)
+  controller.retry_quiet_until = 1.
+  controller.recovering = direction == "SET+"
+  controller.virtual.value = setpoint
+  m = model(direction == "SET-")
+  if direction == "SET-":
+    m.orientationRate.z[:] = [.5] * len(m.orientationRate.z)
+
+  def update(now, speed):
+    return controller.update(now, engaged=True, valid=True, manual=False, override=False,
+                             set_speed=speed, speed=60., accel=0., model=m)
+
+  assert update(1., setpoint) is None
+  assert update(3., setpoint) is None
+  assert controller.pending is None
+  assert update(4., duplicate) is None
+  assert controller.fault
+  assert direction in controller.retries
+
+
+def test_lateral_dropout_keeps_reserve_until_ford_cruise_disengages():
+  controller = AcknowledgedCurveSpeed()
+  controller.retries.add("SET+")
+  for cruise_engaged in (True, False):
+    assert controller.update(3., engaged=False, valid=True, manual=False, override=False,
+                             set_speed=74., speed=60., accel=0., model=None, cruise_engaged=cruise_engaged) is None
+    assert controller.fault == cruise_engaged
+    assert ("SET+" in controller.retries) == cruise_engaged

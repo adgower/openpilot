@@ -70,4 +70,4 @@ class VisionCurveContext:
     valid &= not engaged or (fresh_model and not stock.nonAdaptive and str(state.gearShifter) == "drive" and 25 <= set_speed <= 95)
     return self.cruise.update(now_ns / 1e9, engaged=engaged, valid=valid, manual=manual, override=override, set_speed=set_speed,
                               speed=state.vEgo / MPH, accel=state.aEgo, steering_only=state.steeringPressed, lane_change=lane_change,
-                              model=new_model if 25 * MPH <= state.vEgo <= 95 * MPH else None, comfort_hint_s=hint_s)
+                              model=new_model if 25 * MPH <= state.vEgo <= 95 * MPH else None, comfort_hint_s=hint_s, cruise_engaged=stock.enabled)
