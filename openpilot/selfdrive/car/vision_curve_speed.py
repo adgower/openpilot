@@ -6,7 +6,8 @@ import math
 
 MPH = 0.44704
 MODEL_PREVIEW_SECONDS = 10.
-MIN_PRESS_INTERVAL = .5
+SET_MINUS_INTERVAL = .35
+SET_PLUS_INTERVAL = .5
 COMFORT_LATERAL_ACCEL = 1.5
 COMFORT_APPROACH_DECEL = .7
 COMFORT_RESPONSE_TIME = 1.5
@@ -216,7 +217,7 @@ class VirtualSetSpeed:
         return predicted_decrease > 0. and speed_mph - predicted_decrease / MPH <= target
 
     def update(self, now, ceiling, curve, eligible, inhibit, manual, *, speed_mph, accel_mps2,
-               manual_observed_at=-math.inf, override_observed_at=-math.inf, comfort_mph=None):
+               manual_observed_at=-math.inf, override_observed_at=-math.inf, comfort_mph=None, last_press_at=-math.inf):
         # Consume observations before checking eligibility. A release or brief
         # driver input during missing model samples persists into re-admission.
         self.manual_until = max(self.manual_until, manual_observed_at + 4.)
@@ -266,19 +267,19 @@ class VirtualSetSpeed:
         if not self.curve_active and not trigger and now - self.clear_since >= 1.5:
             target = ceiling
         step = None
-        if now - self.last_step >= MIN_PRESS_INTERVAL:
-            if self.value - target >= self.step_mph:
-                if speed_mph <= target:
-                    return raw, self.value, None, 'already-at-target'
-                if already_slowing_enough:
-                    return raw, self.value, None, 'recorded-deceleration'
-                self.value -= self.step_mph
-                step = 'SET-'
-            elif not self.curve_active and target - self.value >= self.step_mph * .9:
-                self.value = min(ceiling, self.value + self.step_mph)
-                step = 'SET+'
-            if step:
-                self.last_step = now
+        elapsed = now - max(self.last_step, last_press_at)
+        if elapsed >= SET_MINUS_INTERVAL and self.value - target >= self.step_mph:
+            if speed_mph <= target:
+                return raw, self.value, None, 'already-at-target'
+            if already_slowing_enough:
+                return raw, self.value, None, 'recorded-deceleration'
+            self.value -= self.step_mph
+            step = 'SET-'
+        elif elapsed >= SET_PLUS_INTERVAL and not self.curve_active and target - self.value >= self.step_mph * .9:
+            self.value = min(ceiling, self.value + self.step_mph)
+            step = 'SET+'
+        if step:
+            self.last_step = now
         return raw, self.value, step, 'curve' if self.curve_active else 'hold'
 
 
@@ -382,7 +383,8 @@ class AcknowledgedCurveSpeed:
         if pause_for_driver:
             self.virtual.reset()
             self.virtual.value = self.observed
-        if now < self.override_until or model is None or now - self.last_press < MIN_PRESS_INTERVAL:
+        interval = SET_PLUS_INTERVAL if self.recovering else SET_MINUS_INTERVAL
+        if now < self.override_until or model is None or now - self.last_press < interval:
             return None
         blocked = branch_blocked or corridor_veto(model, traces) or len(model.laneLineProbs) < 3 or min(model.laneLineProbs[1], model.laneLineProbs[2]) < .55
         comfort_mph = (comfort_approach_mph(model, curve, speed, comfort_hint_s)
@@ -399,7 +401,8 @@ class AcknowledgedCurveSpeed:
             target, step = min(round(self.observed) + 1, self.ceiling), "SET+"
         else:
             _, target, step, _ = self.virtual.update(now, self.ceiling, curve, True, blocked, False,
-                                                    speed_mph=speed, accel_mps2=accel, comfort_mph=comfort_mph)
+                                                    speed_mph=speed, accel_mps2=accel, comfort_mph=comfort_mph,
+                                                    last_press_at=self.last_press)
         if step is not None:
             self.pending = target
             self.pending_at = self.last_press = now

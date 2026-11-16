@@ -42,7 +42,8 @@ def test_slow_and_restore_only_after_exit():
   assert len(up) == len(down)
   assert min(up) >= 13.5
   assert ceiling == 65
-  assert all(b[0] - a[0] >= .5 for a, b in zip(presses, presses[1:], strict=False))
+  assert all(b[0] - a[0] >= (.35 if b[1] == "SET-" else .5) for a, b in zip(presses, presses[1:], strict=False))
+  assert min(b - a for a, b in zip(down, down[1:], strict=False)) < .5
 
 
 def test_no_second_press_without_acknowledgement():
@@ -165,7 +166,7 @@ def test_recovery_stops_on_uncertain_set_speed_or_driver_intervention(interrupt)
 def test_nonsteering_override_cannot_rebase_below_original_ceiling():
   controller = AcknowledgedCurveSpeed()
   assert drive(controller, secs=1, curved_until=1)[0] == 64
-  assert recovery_update(controller, 1., 64, turn=True) is None
+  assert recovery_update(controller, .9, 64, turn=True) is None
   assert controller.update(1.1, engaged=True, valid=True, manual=False, override=True,
                            set_speed=64, speed=63, accel=0, model=model(True)) is None
   for i in range(200):
@@ -181,7 +182,7 @@ def test_nonsteering_override_cannot_rebase_below_original_ceiling():
 def test_lane_change_pauses_and_restores_known_original_ceiling():
   controller = AcknowledgedCurveSpeed()
   assert drive(controller, secs=1, curved_until=1)[0] == 64
-  assert recovery_update(controller, 1., 64, turn=True) is None
+  assert recovery_update(controller, .9, 64, turn=True) is None
   for now in (1.1, 1.8, 2.2):
     assert controller.update(now, engaged=True, valid=True, manual=False, override=False, lane_change=True,
                              set_speed=64, speed=62, accel=0, model=model(False)) is None
