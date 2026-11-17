@@ -1,5 +1,21 @@
 from openpilot.selfdrive.car.predicted_speed import PredictedSpeedDemand
-from openpilot.selfdrive.car.vision_curve_speed import AcknowledgedCurveSpeed, COMFORT_APPROACH_DECEL, MPH
+from openpilot.selfdrive.car.vision_curve_speed import COMFORT_APPROACH_DECEL, MPH
+from openpilot.selfdrive.car.vision_curve_recovery import AcknowledgedCurveSpeed
+
+class ReleaseEdgeFilter:
+  """Pass active commands unchanged, but send only one neutral per assertion."""
+  def __init__(self):
+    self.asserted = False
+
+  def update(self, button):
+    if button in ('SET-', 'SET+'):
+      self.asserted = True
+      return button
+    if button == '' and self.asserted:
+      self.asserted = False
+      return ''
+    return None
+
 
 BUTTON_MASKS = (
   "CcAslButtnCnclPress", "CcAsllButtnResPress", "CcAslButtnCnclResPress", "CcAslButtnIndxDecPress", "CcAslButtnIndxIncPress",
@@ -24,6 +40,8 @@ class VisionCurveContext:
     self.forecast_mph = None
     self.forecast_clear = False
     self.forecast_data_valid = False
+    self.shared_button_action = None
+    self.release_edge = ReleaseEdgeFilter()
 
   def update(self, now_ns, sm, parser, state, control, metric):
     model_ns = sm.logMonoTime["modelV2"]
@@ -41,6 +59,19 @@ class VisionCurveContext:
     engaged = control.enabled and control.latActive and stock.enabled and not control.longActive
     manual = (control.cruiseControl.cancel or control.cruiseControl.resume or
               any(switches.get(name) or any(switch_samples.get(name, ())) for name in BUTTON_MASKS))
+    def pressed(names):
+      return any(switches.get(name) or any(switch_samples.get(name, ())) for name in names)
+    shared_pressed = pressed(('CcAslButtnCnclResPress',))
+    if not shared_pressed:
+      self.shared_button_action = None
+    elif self.shared_button_action is None:
+      self.shared_button_action = 'cancel' if stock.enabled else 'resume'
+    # Navigator's physical cancel/resume is the shared switch. Latch the action
+    # at its press edge so the ensuing cruise-state transition cannot invert it.
+    user_action = ('set' if pressed(('CcAslButtnSetDecPress', 'CcAslButtnSetIncPress', 'CcAslButtnSetPress',
+                                    'CcAslButtnIndxDecPress', 'CcAslButtnIndxIncPress')) else
+                   'cancel' if control.cruiseControl.cancel or pressed(('CcAslButtnCnclPress', 'CcAslButtnOffCnclPress')) else
+                   'resume' if pressed(('CcAsllButtnResPress',)) else self.shared_button_action)
     override = state.gasPressed or state.brakePressed
     valid &= not engaged or (fresh_model and not stock.nonAdaptive and str(state.gearShifter) == "drive" and 25 <= set_speed <= 95)
     radar_fresh = False
@@ -83,7 +114,8 @@ class VisionCurveContext:
         self.forecast_mph = self.prediction.observe(model_ns / 1e9, state.vEgo / MPH, self.cruise.ceiling or set_speed,
                                                   new_model, allowed, radar_clear)
         self.forecast_data_valid = self.prediction.data_valid
-        self.forecast_clear = (self.prediction.available and self.forecast_mph is None and self.prediction.detect_since is None)
+        self.forecast_clear = (self.prediction.available and self.forecast_mph is None and
+                               self.prediction.detect_since is None and not self.prediction.future_slowdown)
       # Driver and sensor changes can occur between the 20 Hz model samples.
       if not (allowed and radar_clear):
         self.prediction.reset()
@@ -93,7 +125,10 @@ class VisionCurveContext:
         valid &= radar_fresh and self.forecast_data_valid
     # Drop pending authority on model loss while engaged. A clean
     # disengagement clears the session even if the model is unavailable.
-    return self.cruise.update(now_ns / 1e9, engaged=engaged, valid=valid, manual=manual, override=override, set_speed=set_speed,
+    button = self.cruise.update(now_ns / 1e9, engaged=engaged, valid=valid, manual=manual, override=override, set_speed=set_speed,
                               speed=state.vEgo / MPH, accel=state.aEgo, steering_only=state.steeringPressed, lane_change=lane_change,
                               model=new_model if 25 * MPH <= state.vEgo <= 95 * MPH else None, comfort_hint_s=hint_s, cruise_engaged=stock.enabled,
-                              forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear)
+                              forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear, user_action=user_action,
+                              override_kind='brake' if state.brakePressed else 'gas' if state.gasPressed else None)
+
+    return self.release_edge.update(button)

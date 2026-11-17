@@ -32,6 +32,9 @@ class PredictedSpeedDemand:
     self.release_since = None
     self.target = None
     self.qualified = False
+    # Future-speed evidence is distinct from immediate acceleration. Crossing
+    # the acceleration admission threshold does not prove the approach cleared.
+    self.future_slowdown = False
 
   def _future_speed(self, model, speed_mph):
     times, speeds = list(model.velocity.t), list(model.velocity.x)
@@ -81,6 +84,7 @@ class PredictedSpeedDemand:
       return None
     self.data_valid = True
     self.available = True
+    self.future_slowdown = math.isfinite(future_speed) and speed_mph - future_speed >= 4.0
     cue = speed_mph - future_speed >= 4.0 and (self.raw_threshold is None or accel <= self.raw_threshold)
     if cue:
       self.release_since = None

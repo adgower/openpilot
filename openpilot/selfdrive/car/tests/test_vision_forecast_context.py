@@ -3,7 +3,8 @@ from types import SimpleNamespace
 import pytest
 
 from openpilot.selfdrive.car.vision_curve_context import VisionCurveContext
-from openpilot.selfdrive.car.vision_curve_speed import AcknowledgedCurveSpeed, MPH
+from openpilot.selfdrive.car.vision_curve_recovery import AcknowledgedCurveSpeed
+from openpilot.selfdrive.car.vision_curve_speed import MPH
 
 
 class Messages(dict):
@@ -182,7 +183,7 @@ def test_forecast_owned_reduction_holds_during_stop_and_restores_after_valid_cle
   for index in range(15, 41):
     values = fixture.update(index * 0.05)
     assert values["valid"]
-    assert fixture.context.cruise.last_action is None
+    assert fixture.context.cruise.last_action not in ("SET-", "SET+")
     assert not controller.fault
   fixture.sm["modelV2"].action.shouldStop = False
   fixture.sm["modelV2"].velocity.x = [64.0 * MPH] * 6
@@ -198,7 +199,7 @@ def test_forecast_owned_reduction_holds_during_stop_and_restores_after_valid_cle
 
 
 @pytest.mark.parametrize("pedal", ["brakePressed", "gasPressed"])
-def test_physical_pedal_after_reduction_keeps_existing_override_fault(pedal):
+def test_physical_pedal_pauses_without_fault_and_brake_requires_resume(pedal):
   fixture = ContextFixture()
   controller = AcknowledgedCurveSpeed()
   fixture.context.cruise = CaptureCruise(controller)
@@ -207,14 +208,34 @@ def test_physical_pedal_after_reduction_keeps_existing_override_fault(pedal):
     if fixture.context.cruise.last_action == "SET-":
       fixture.state.cruiseState.speedCluster -= MPH
   setattr(fixture.state, pedal, True)
-  fixture.update(0.75)
-  assert controller.fault
-  assert fixture.context.cruise.last_action is None
+  if pedal == "brakePressed":
+    fixture.state.cruiseState.enabled = False
+  for index in range(15, 20):
+    fixture.update(index * .05)
+    assert fixture.context.cruise.last_action not in ("SET-", "SET+")
+  assert not controller.fault
+  assert controller.ceiling == 65
+  assert controller.suspended == (pedal == "brakePressed")
   setattr(fixture.state, pedal, False)
   fixture.sm["modelV2"].velocity.x = [64.0 * MPH] * 6
-  for index in range(16, 80):
-    fixture.update(index * 0.05)
-    assert fixture.context.cruise.last_action is None
+  for index in range(20, 50):
+    fixture.update(index * .05)
+    if pedal == "brakePressed":
+      assert fixture.context.cruise.last_action not in ("SET-", "SET+")
+    elif fixture.context.cruise.last_action == "SET+":
+      fixture.state.cruiseState.speedCluster += MPH
+  if pedal == "brakePressed":
+    fixture.parser.vl["Steering_Data_FD1"]["CcAslButtnCnclResPress"] = 1
+    fixture.update(2.5)
+    fixture.state.cruiseState.enabled = True
+    fixture.update(2.51, new_model=False)
+    fixture.parser.vl["Steering_Data_FD1"]["CcAslButtnCnclResPress"] = 0
+    for index in range(51, 85):
+      fixture.update(index * .05)
+      if fixture.context.cruise.last_action == "SET+":
+        fixture.state.cruiseState.speedCluster += MPH
+  assert fixture.state.cruiseState.speedCluster == pytest.approx(65 * MPH)
+  assert not controller.fault
 
 
 def test_forecast_clear_requires_release_dwell_and_no_pending_admission():
