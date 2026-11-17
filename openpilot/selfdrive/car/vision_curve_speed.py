@@ -217,7 +217,7 @@ class VirtualSetSpeed:
         return predicted_decrease > 0. and speed_mph - predicted_decrease / MPH <= target
 
     def update(self, now, ceiling, curve, eligible, inhibit, manual, *, speed_mph, accel_mps2,
-               manual_observed_at=-math.inf, override_observed_at=-math.inf, comfort_mph=None, last_press_at=-math.inf):
+               manual_observed_at=-math.inf, override_observed_at=-math.inf, comfort_mph=None, last_press_at=-math.inf, forecast_mph=None):
         # Consume observations before checking eligibility. A release or brief
         # driver input during missing model samples persists into re-admission.
         self.manual_until = max(self.manual_until, manual_observed_at + 4.)
@@ -238,6 +238,10 @@ class VirtualSetSpeed:
         self.value = min(self.value, ceiling)
         reference = ceiling if curve is None else min(ceiling, math.sqrt(1.8 / curve.curvature) / MPH)
         raw = reference if comfort_mph is None else min(reference, comfort_mph)
+        forecast = (min(ceiling, forecast_mph) if forecast_mph is not None and
+                    math.isfinite(forecast_mph) and forecast_mph >= self.min_set_mph else None)
+        if forecast is not None:
+            raw = min(raw, forecast)
         # Keep the curve target between the minimum set speed and the driver ceiling.
         proposal = min(ceiling, max(self.min_set_mph, raw))
         if inhibit or now < self.manual_until or now < self.override_until:
@@ -247,16 +251,21 @@ class VirtualSetSpeed:
             self.previous_direction = None
             mode = 'manual-hold' if now < self.manual_until else 'inhibited' if inhibit else 'override-hold'
             return raw, self.value, None, mode
+        # Forecast samples start at three seconds. Use the existing two-second
+        # conservative response check when there is no nearer measured bend.
+        seconds_ahead = curve.first_horizon_s if curve is not None else 2. if forecast is not None else 0.
         already_slowing_enough = self._decel_reaches_target(
-            now, speed_mph, accel_mps2, proposal, curve.first_horizon_s if curve is not None else 0.)
-        trigger = curve is not None and ceiling - max(self.min_set_mph, reference) >= 2.
+            now, speed_mph, accel_mps2, proposal, seconds_ahead)
+        forecast_trigger = forecast is not None and ceiling - forecast >= 2.
+        trigger = forecast_trigger or (curve is not None and ceiling - max(self.min_set_mph, reference) >= 2.)
+        direction = 0 if forecast_trigger else curve.direction if curve is not None else None
         if trigger:
-            if self.detect_since is None or curve.direction != self.previous_direction:
+            if self.detect_since is None or direction != self.previous_direction:
                 self.detect_since = now
                 self.curve_active = False
-            self.previous_direction = curve.direction
+            self.previous_direction = direction
             self.clear_since = None
-            self.curve_active |= now - self.detect_since >= .6
+            self.curve_active |= forecast_trigger or now - self.detect_since >= .6
         else:
             self.detect_since = None
             self.clear_since = now if self.clear_since is None else self.clear_since
@@ -308,6 +317,7 @@ class AcknowledgedCurveSpeed:
         self.pending_retried = False
         self.pending_interrupted = False
         self.retry_quiet_until = -math.inf
+        self.forecast_owned = False
 
     def reset(self, *, preserve_branch=False):
         self.virtual.reset()
@@ -319,8 +329,11 @@ class AcknowledgedCurveSpeed:
         self.pending_retried = False
         self.pending_interrupted = False
         self.retry_quiet_until = -math.inf
+        self.forecast_owned = False
 
-    def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model, steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None):
+    def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model,
+               steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None,
+               forecast_mph=None, forecast_clear=False):
         # An assistance dropout does not end an engaged Ford cruise session.
         if valid and not engaged:
             if not cruise_engaged:
@@ -370,6 +383,8 @@ class AcknowledgedCurveSpeed:
             if abs(set_speed - self.pending) <= self.SPEED_TOLERANCE:
                 self.observed = set_speed
                 self.pending = None
+                if self.observed >= self.ceiling - self.SPEED_TOLERANCE:
+                    self.forecast_owned = False
                 if self.pending_retried:
                     self.pending_retried = False
                     self.retry_quiet_until = now + self.ACK_TIMEOUT
@@ -427,18 +442,36 @@ class AcknowledgedCurveSpeed:
         interval = SET_PLUS_INTERVAL if self.recovering else SET_MINUS_INTERVAL
         if now < self.override_until or model is None or now - self.last_press < interval:
             return None
-        blocked = branch_blocked or corridor_veto(model, traces) or len(model.laneLineProbs) < 3 or min(model.laneLineProbs[1], model.laneLineProbs[2]) < .55
-        comfort_mph = (comfort_approach_mph(model, curve, speed, comfort_hint_s)
-                       if curve is not None and comfort_hint_s is not None and not blocked else None)
+        path_blocked = branch_blocked or corridor_veto(model, traces)
+        lane_blocked = len(model.laneLineProbs) < 3 or min(model.laneLineProbs[1], model.laneLineProbs[2]) < .55
+        # Forecast demand is separately qualified upstream on every model frame.
+        # Lane confidence gates geometric curve speed; valid corridor geometry
+        # and branch context continue to gate either source.
+        forecast = (min(self.ceiling, forecast_mph) if forecast_mph is not None and
+                    math.isfinite(forecast_mph) and forecast_mph >= 25. and not path_blocked else None)
+        usable_curve = curve if not lane_blocked else None
+        geometric_slowdown = curve is not None and self.ceiling - math.sqrt(1.8 / curve.curvature) / MPH >= 2.
+        forecast_restore = (self.forecast_owned and forecast_clear and forecast is None and
+                            not path_blocked and not geometric_slowdown)
+        blocked = path_blocked or (lane_blocked and forecast is None and not forecast_restore)
+        if self.forecast_owned and forecast is None and not forecast_clear:
+            blocked = True
+        comfort_mph = (comfort_approach_mph(model, usable_curve, speed, comfort_hint_s)
+                       if usable_curve is not None and comfort_hint_s is not None and not blocked else None)
+        demand = self.ceiling
+        if usable_curve is not None and not path_blocked:
+            demand = min(demand, comfort_mph if comfort_mph is not None else math.sqrt(1.8 / usable_curve.curvature) / MPH)
+        geometry_demand = demand
+        if forecast is not None:
+            demand = min(demand, forecast)
         if retry is not None:
             self.virtual.value = self.observed
             if retry == "SET-":
-                demand = comfort_mph if comfort_mph is not None else math.sqrt(1.8 / curve.curvature) / MPH if curve else self.ceiling
                 if self.pending - 1 < max(25., demand):
                     return None
         if self.recovering:
-            curve_demand = curve is not None and self.ceiling - math.sqrt(1.8 / curve.curvature) / MPH >= 2.
-            if blocked or curve_demand:
+            active_demand = self.ceiling - demand >= 2.
+            if blocked or active_demand:
                 self.recovery_clear_since = None
                 return None
             if self.recovery_clear_since is None:
@@ -448,9 +481,9 @@ class AcknowledgedCurveSpeed:
             target, step = min(round(self.observed) + 1, self.ceiling), "SET+"
         else:
             previous_step = self.virtual.last_step
-            _, target, step, _ = self.virtual.update(now, self.ceiling, curve, True, blocked, False,
+            _, target, step, _ = self.virtual.update(now, self.ceiling, usable_curve, True, blocked, False,
                                                     speed_mph=speed, accel_mps2=accel, comfort_mph=comfort_mph,
-                                                    last_press_at=self.last_press)
+                                                    last_press_at=self.last_press, forecast_mph=forecast)
         # An ACK cannot identify which of the original and retried pulses took
         # effect. Hold one mph of headroom for each retried direction until
         # Ford cruise disengages, even after the post-retry observation period.
@@ -463,6 +496,8 @@ class AcknowledgedCurveSpeed:
             self.virtual.value = self.observed
             return None
         if step is not None:
+            if step == "SET-" and forecast is not None and forecast <= geometry_demand:
+                self.forecast_owned = True
             if retry is not None:
                 self.retries.add(retry)
                 self.pending_retried = True

@@ -1,3 +1,4 @@
+from openpilot.selfdrive.car.predicted_speed import PredictedSpeedDemand
 from openpilot.selfdrive.car.vision_curve_speed import AcknowledgedCurveSpeed, COMFORT_APPROACH_DECEL, MPH
 
 BUTTON_MASKS = (
@@ -19,6 +20,10 @@ class VisionCurveContext:
     self.lane_changing = True
     self.comfort = comfort
     self.decel_since = None
+    self.prediction = PredictedSpeedDemand() if comfort else None
+    self.forecast_mph = None
+    self.forecast_clear = False
+    self.forecast_data_valid = False
 
   def update(self, now_ns, sm, parser, state, control, metric):
     model_ns = sm.logMonoTime["modelV2"]
@@ -36,6 +41,15 @@ class VisionCurveContext:
     engaged = control.enabled and control.latActive and stock.enabled and not control.longActive
     manual = (control.cruiseControl.cancel or control.cruiseControl.resume or
               any(switches.get(name) or any(switch_samples.get(name, ())) for name in BUTTON_MASKS))
+    override = state.gasPressed or state.brakePressed
+    valid &= not engaged or (fresh_model and not stock.nonAdaptive and str(state.gearShifter) == "drive" and 25 <= set_speed <= 95)
+    radar_fresh = False
+    radar_clear = False
+    if self.comfort:
+      radar_ns = sm.logMonoTime["radarState"]
+      radar_fresh = sm.valid["radarState"] and 0 <= now_ns - radar_ns <= 200_000_000
+      radar = sm["radarState"] if radar_fresh else None
+      radar_clear = radar is not None and not radar.leadOne.present and not radar.leadTwo.present
     new_model = None
     hint_s = 0. if self.comfort else None
     if not (engaged and fresh_model):
@@ -49,8 +63,6 @@ class VisionCurveContext:
       if fresh_model:
         new_model = model
         if self.comfort and engaged:
-          radar_ns = sm.logMonoTime["radarState"]
-          radar_fresh = sm.valid["radarState"] and 0 <= now_ns - radar_ns <= 200_000_000
           lead = sm["radarState"].leadOne if radar_fresh else None
           clear = lead is not None and (not lead.present or (
             lead.dRel >= 3.5 * state.vEgo and lead.dRel >= 20. * max(0., -lead.vRel)))
@@ -63,11 +75,25 @@ class VisionCurveContext:
               self.decel_since = model_ns
             if model_ns - self.decel_since >= 400_000_000:
               hint_s = min(2., forecast / COMFORT_APPROACH_DECEL)
-    override = state.gasPressed or state.brakePressed
     lane_change = state.leftBlinker or state.rightBlinker or self.lane_changing
+    if self.comfort:
+      allowed = (valid and engaged and fresh_model and not (manual or override or state.steeringPressed or lane_change)
+                 and 40 * MPH <= state.vEgo <= 95 * MPH)
+      if new_model is not None:
+        self.forecast_mph = self.prediction.observe(model_ns / 1e9, state.vEgo / MPH, self.cruise.ceiling or set_speed,
+                                                  new_model, allowed, radar_clear)
+        self.forecast_data_valid = self.prediction.data_valid
+        self.forecast_clear = (self.prediction.available and self.forecast_mph is None and self.prediction.detect_since is None)
+      # Driver and sensor changes can occur between the 20 Hz model samples.
+      if not (allowed and radar_clear):
+        self.prediction.reset()
+        self.forecast_mph = None
+        self.forecast_clear = False
+      if engaged:
+        valid &= radar_fresh and self.forecast_data_valid
     # Drop pending authority on model loss while engaged. A clean
     # disengagement clears the session even if the model is unavailable.
-    valid &= not engaged or (fresh_model and not stock.nonAdaptive and str(state.gearShifter) == "drive" and 25 <= set_speed <= 95)
     return self.cruise.update(now_ns / 1e9, engaged=engaged, valid=valid, manual=manual, override=override, set_speed=set_speed,
                               speed=state.vEgo / MPH, accel=state.aEgo, steering_only=state.steeringPressed, lane_change=lane_change,
-                              model=new_model if 25 * MPH <= state.vEgo <= 95 * MPH else None, comfort_hint_s=hint_s, cruise_engaged=stock.enabled)
+                              model=new_model if 25 * MPH <= state.vEgo <= 95 * MPH else None, comfort_hint_s=hint_s, cruise_engaged=stock.enabled,
+                              forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear)
