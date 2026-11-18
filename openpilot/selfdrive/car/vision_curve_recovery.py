@@ -26,6 +26,7 @@ class AcknowledgedCurveSpeed:
     self.target = None
     self.forecast_target = None
     self.geometry_target = None
+    self.current_demand = None
     self.detect_since = self.clear_since = self.accel_since = None
     self.curve_direction = None
     self.model_ok = False
@@ -44,6 +45,7 @@ class AcknowledgedCurveSpeed:
     self.resume_armed = False
     self.forecast_owned = self.forecast_restore_active = False
     self.forecast_target = self.geometry_target = None
+    self.current_demand = float(self.ceiling)
     self.detect_since = self.clear_since = self.accel_since = None
     self.geometry_restore_blocked = False
     self.model_ok = False
@@ -77,22 +79,26 @@ class AcknowledgedCurveSpeed:
     resume_edge = user_action == 'resume' and self.previous_user_action != 'resume'
     self.previous_user_action = user_action
     # A physical SET selection replaces intent only after button release and
-    # only when no unresolved automatic pulse can contaminate that selection.
+    # without treating driver movement as an automatic acknowledgement.
     if user_action == 'set':
       self.selection_at = self.manual_at = now
-      if self.transport is not None and self.transport.pending:
-        self.fault = True
-      # No unresolved pulse: a physical SET explains this movement. Release
-      # the old scheduler without submitting the driver change as an ACK.
-      observed = self.transport.observed if self.transport is not None and not self.transport.pending else set_speed
+      # A physical SET explains this movement. Release the old scheduler
+      # without submitting the driver change as an automatic ACK.
+      observed = self.transport.observed if self.transport is not None else set_speed
       return self._send(now, observed, False)
     if self.selection_at is not None:
       if now - self.manual_at < .4:
-        observed = self.transport.observed if self.transport is not None and not self.transport.pending else set_speed
+        observed = self.transport.observed if self.transport is not None else set_speed
         return self._send(now, observed, False)
       self.selection_at = None
-      if not self.fault and valid and 25 <= set_speed <= 95:
+      if valid and 25 <= set_speed <= 95:
+        previous_transport = self.transport
         self._start(set_speed)
+        if previous_transport is not None:
+          # Physical SET changes driver intent, not proof that old automatic
+          # presses were applied. Preserve every outstanding movement credit.
+          self.transport.debt = previous_transport.debt.copy()
+          self.transport.next_press = max(self.transport.next_press, previous_transport.next_press)
     if resume_edge and (self.suspended or not cruise_engaged):
       # A RES tap while already active must not authorize a later unrelated
       # suspension. Retain a genuine RES edge preceding OEM engagement.
@@ -107,7 +113,11 @@ class AcknowledgedCurveSpeed:
       return self._send(now, set_speed, False)
     if override or user_action == 'cancel':
       self.suspended = True
-      self.resume_armed = False
+      # A genuine RES press can precede OEM engagement while the driver is
+      # accelerating. Gas pauses output but must not erase that permission.
+      # Brake, cancel and other overrides still revoke it.
+      if override_kind != 'gas' or user_action == 'cancel':
+        self.resume_armed = False
       return self._send(now, set_speed, False)
     if not cruise_engaged:
       if self.ceiling is not None:
@@ -184,6 +194,8 @@ class AcknowledgedCurveSpeed:
 
       forecast_restore = self.forecast_restore_active and forecast_clear and forecast is None and not raw_geometric_demand
       self.model_ok = not (path_blocked or branch_blocked) and (lane_ok or forecast is not None or forecast_restore)
+      self.current_demand = min(self.ceiling, self.geometry_target if qualified_geometry else self.ceiling,
+                                self.forecast_target if self.forecast_target is not None else self.ceiling)
       active = geometry_active or self.forecast_target is not None
       self.clear_pending = False
       if active and self.model_ok:
@@ -212,7 +224,7 @@ class AcknowledgedCurveSpeed:
       allowed = False
     # OEM following/coasting remains authoritative; avoid a new SET- while
     # actual speed is already below the requested comfort target.
-    if self.target is not None and self.target < set_speed and speed <= self.target:
+    if self.target is not None and self.target < set_speed and speed <= max(self.target, self.current_demand or self.target):
       allowed = False
     return self._send(now, set_speed, allowed)
 

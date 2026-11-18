@@ -26,9 +26,9 @@ class Rig:
       if lane_confidence is not None:
         m.laneLineProbs = [lane_confidence] * 4
       m.action = NS(shouldStop=False, desiredAcceleration=acceleration)
-      args = dict(engaged=True, valid=True, manual=False, override=False, set_speed=self.observed,
-                  speed=70., accel=0., model=m, cruise_engaged=True,
-                  forecast_mph=forecast, forecast_clear=clear)
+      args = {'engaged': True, 'valid': True, 'manual': False, 'override': False, 'set_speed': self.observed,
+                  'speed': 70., 'accel': 0., 'model': m, 'cruise_engaged': True,
+                  'forecast_mph': forecast, 'forecast_clear': clear}
       args.update(kwargs)
       button = self.c.update(self.t, **args)
       out = self.c.last_transport
@@ -95,7 +95,7 @@ class RecoveryPolicyTest(unittest.TestCase):
     r.run(.1, user_action='resume', manual=True)
     r.run(3., acceleration=.2)
     self.assertEqual(r.observed, 70)
-    self.assertEqual(set(b for _, b in r.pulses), {'SET-', 'SET+'})
+    self.assertEqual({b for _, b in r.pulses}, {'SET-', 'SET+'})
 
   def test_held_resume_cannot_arm_a_second_automatic_resume(self):
     r = Rig().run(2., forecast=65., clear=False)
@@ -213,3 +213,164 @@ class SharedSwitchTest(unittest.TestCase):
     f.update(.11)
     self.assertFalse(c.suspended)
     self.assertEqual(c.ceiling, 70)
+
+
+class DriverSelectionRegressionTest(unittest.TestCase):
+  def test_driver_selection_does_not_permanently_disable_future_curve_control(self):
+    c = Controller()
+    c._start(70)
+    c.transport.observed = c.observed = 68
+    c.transport.debt[-1] = c.transport.debt[1] = 2
+    m = road()
+    m.action = NS(desiredAcceleration=0.2, shouldStop=False)
+    for t, observed, held in ((0.0, 68, True), (0.1, 69, True), (0.4, 70, True), (0.5, 70, False), (1.0, 70, False), (3.0, 70, False)):
+      c.update(
+        t,
+        engaged=True,
+        valid=True,
+        manual=held,
+        override=False,
+        set_speed=observed,
+        speed=64.0,
+        accel=0.0,
+        model=m,
+        cruise_engaged=True,
+        forecast_mph=None,
+        forecast_clear=True,
+        user_action='set' if held else None,
+      )
+    self.assertFalse(c.fault)
+    self.assertEqual(c.ceiling, 70)
+    self.assertEqual(c.transport.up_debt, 2)
+    self.assertEqual(c.transport.down_debt, 2)
+    output = c.update(
+      3.1,
+      engaged=True,
+      valid=True,
+      manual=False,
+      override=False,
+      set_speed=70.0,
+      speed=64.0,
+      accel=0.0,
+      model=m,
+      cruise_engaged=True,
+      forecast_mph=50.0,
+      forecast_clear=False,
+    )
+    self.assertEqual(output, 'SET-')
+    self.assertEqual(c.transport.down_debt, 3)
+    self.assertEqual(c.transport.up_debt, 2)
+    self.assertFalse(c.fault)
+
+  def test_manual_lower_selection_keeps_unresolved_upward_credit(self):
+    c = Controller()
+    c._start(70)
+    c.transport.debt[1] = 2
+    m = road()
+    m.action = NS(desiredAcceleration=0.2, shouldStop=False)
+    outputs = []
+    for t, held in ((0.0, True), (0.1, True), (0.6, False), (1.0, False)):
+      outputs.append(
+        c.update(
+          t,
+          engaged=True,
+          valid=True,
+          manual=held,
+          override=False,
+          set_speed=62.0,
+          speed=60.0,
+          accel=0.0,
+          model=m,
+          cruise_engaged=True,
+          forecast_clear=True,
+          user_action='set' if held else None,
+        )
+      )
+    self.assertEqual(c.ceiling, 62)
+    self.assertEqual(c.transport.up_debt, 2)
+    self.assertNotIn('SET+', outputs)
+    self.assertFalse(c.fault)
+
+
+class CurrentDemandRegressionTest(unittest.TestCase):
+  def test_old_episode_minimum_does_not_reduce_when_already_below_current_demand(self):
+    c = Controller()
+    c._start(70)
+    c.target = 38.0
+    m = road(bend=True)
+    m.action = NS(desiredAcceleration=0.0, shouldStop=False)
+    outputs = []
+    for i in range(101):
+      outputs.append(
+        c.update(i * 0.01, engaged=True, valid=True, manual=False, override=False, set_speed=70.0, speed=40.0, accel=0.0, model=m, cruise_engaged=True)
+      )
+    self.assertGreater(c.geometry_target, 40.0)
+    self.assertNotIn('SET-', outputs)
+    self.assertEqual(c.target, 38.0, 'Do not authorize restoration into a curve')
+
+  def test_stronger_forecast_still_reduces(self):
+    c = Controller()
+    c._start(70)
+    c.target = 38.0
+    m = road(bend=True)
+    m.action = NS(desiredAcceleration=0.0, shouldStop=False)
+    outputs = [
+      c.update(
+        i * 0.01, engaged=True, valid=True, manual=False, override=False, set_speed=70.0, speed=40.0, accel=0.0, model=m, cruise_engaged=True, forecast_mph=35.0
+      )
+      for i in range(101)
+    ]
+    self.assertIn('SET-', outputs)
+
+
+class ResumeAcceleratorRegressionTest(unittest.TestCase):
+  def call(self, c, t, **kw):
+    m = road()
+    m.action = NS(desiredAcceleration=0.3, shouldStop=False)
+    args = {
+      'engaged': True, 'valid': True, 'manual': False, 'override': False, 'set_speed': 65.0,
+      'speed': 60.0, 'accel': 0.0, 'model': m, 'cruise_engaged': True, 'forecast_clear': True
+    }
+    args.update(kw)
+    return c.update(t, **args)
+
+  def suspended(self):
+    c = Controller()
+    c._start(70)
+    c.transport.observed = c.observed = 65
+    self.call(c, 0.0, override=True, override_kind='brake', engaged=False, cruise_engaged=False)
+    return c
+
+  def test_explicit_resume_during_gas_survives_until_oem_engages(self):
+    c = self.suspended()
+    self.call(c, 1.0, user_action='resume', manual=True, override=True, override_kind='gas', engaged=False, cruise_engaged=False)
+    self.assertTrue(c.resume_armed)
+    self.call(c, 1.1, user_action='resume', manual=True, override=True, override_kind='gas')
+    self.call(c, 1.2, override=True, override_kind='gas')
+    self.call(c, 1.5)
+    self.assertFalse(c.suspended)
+    outputs = [self.call(c, 1.6 + i * 0.05) for i in range(12)]
+    self.assertIn('SET+', outputs)
+    self.assertNotIn('RESUME', outputs)
+
+  def test_gas_without_resume_does_not_rearm(self):
+    c = self.suspended()
+    self.call(c, 1.0, override=True, override_kind='gas', engaged=False, cruise_engaged=False)
+    self.call(c, 1.5)
+    self.assertTrue(c.suspended)
+
+  def test_brake_clears_previous_resume_authorization(self):
+    c = self.suspended()
+    self.call(c, 1.0, user_action='resume', manual=True, engaged=False, cruise_engaged=False)
+    self.call(c, 1.1, override=True, override_kind='brake', engaged=False, cruise_engaged=False)
+    self.call(c, 1.5)
+    self.assertTrue(c.suspended)
+    self.assertFalse(c.resume_armed)
+
+  def test_cancel_with_gas_still_clears_resume(self):
+    c = self.suspended()
+    self.call(c, 1.0, user_action='resume', manual=True, engaged=False, cruise_engaged=False)
+    self.call(c, 1.1, user_action='cancel', manual=True, override=True, override_kind='gas')
+    self.call(c, 1.5)
+    self.assertTrue(c.suspended)
+    self.assertFalse(c.resume_armed)
