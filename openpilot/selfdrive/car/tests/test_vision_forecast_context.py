@@ -125,12 +125,12 @@ def test_stale_channel_revokes_cached_forecast_between_model_frames(source):
   assert not values["valid"]
 
 
-def test_fresh_lead_arrival_clears_forecast_without_invalidating_data():
+def test_fresh_lead_arrival_preserves_ego_forecast():
   fixture = ContextFixture()
   fixture.qualify()
   fixture.sm["radarState"].leadTwo.present = True
   values = fixture.update(0.76, new_model=False)
-  assert values["forecast_mph"] is None
+  assert values["forecast_mph"] == pytest.approx(55.0)
   assert not values["forecast_clear"]
   assert values["valid"]
 
@@ -186,7 +186,7 @@ def test_forecast_owned_reduction_holds_during_stop_and_restores_after_valid_cle
     assert fixture.context.cruise.last_action not in ("SET-", "SET+")
     assert not controller.fault
   fixture.sm["modelV2"].action.shouldStop = False
-  fixture.sm["modelV2"].velocity.x = [64.0 * MPH] * 6
+  fixture.sm["modelV2"].velocity.x = [65.0 * MPH] * 6
   for index in range(41, 80):
     fixture.update(index * 0.05)
     if fixture.context.cruise.last_action:
@@ -217,7 +217,7 @@ def test_physical_pedal_pauses_without_fault_and_brake_requires_resume(pedal):
   assert controller.ceiling == 65
   assert controller.suspended == (pedal == "brakePressed")
   setattr(fixture.state, pedal, False)
-  fixture.sm["modelV2"].velocity.x = [64.0 * MPH] * 6
+  fixture.sm["modelV2"].velocity.x = [65.0 * MPH] * 6
   for index in range(20, 50):
     fixture.update(index * .05)
     if pedal == "brakePressed":
@@ -241,7 +241,7 @@ def test_physical_pedal_pauses_without_fault_and_brake_requires_resume(pedal):
 def test_forecast_clear_requires_release_dwell_and_no_pending_admission():
   fixture = ContextFixture()
   fixture.qualify()
-  fixture.sm["modelV2"].velocity.x = [64.0 * MPH] * 6
+  fixture.sm["modelV2"].velocity.x = [65.0 * MPH] * 6
   assert not fixture.update(0.8)["forecast_clear"]
   for index in range(17, 28):
     values = fixture.update(index * 0.05)
@@ -263,4 +263,5 @@ def test_forecast_requires_supported_enabled_oem_context(reason):
   for index in range(20):
     values = fixture.update(index * 0.05, metric=reason == "metric")
     assert values.get("forecast_mph") is None
-    assert not values.get("forecast_clear", False)
+    if reason != "low_speed":
+      assert not values.get("forecast_clear", False)

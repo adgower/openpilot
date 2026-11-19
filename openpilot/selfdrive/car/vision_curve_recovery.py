@@ -26,6 +26,7 @@ class AcknowledgedCurveSpeed:
     self.target = None
     self.forecast_target = None
     self.geometry_target = None
+    self.geometry_hold = self.geometry_clear_since = None
     self.current_demand = None
     self.detect_since = self.clear_since = self.accel_since = None
     self.curve_direction = None
@@ -45,6 +46,7 @@ class AcknowledgedCurveSpeed:
     self.resume_armed = False
     self.forecast_owned = self.forecast_restore_active = False
     self.forecast_target = self.geometry_target = None
+    self.geometry_hold = self.geometry_clear_since = None
     self.current_demand = float(self.ceiling)
     self.detect_since = self.clear_since = self.accel_since = None
     self.geometry_restore_blocked = False
@@ -75,7 +77,11 @@ class AcknowledgedCurveSpeed:
 
   def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model,
              steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None,
-             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None):
+             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None):
+    # No inhibited interval may contribute to geometric release evidence.
+    if (not valid or not engaged or not cruise_engaged or manual or override or
+        steering_only or lane_change or forecast_available is False or self.suspended):
+      self.geometry_clear_since = None
     resume_edge = user_action == 'resume' and self.previous_user_action != 'resume'
     self.previous_user_action = user_action
     # A physical SET selection replaces intent only after button release and
@@ -137,13 +143,17 @@ class AcknowledgedCurveSpeed:
 
     if steering_only or lane_change:
       self.override_until = max(self.override_until, now + .25)
-    permitted = valid and engaged and not manual and not steering_only and not lane_change and not self.fault
+    permitted = (valid and engaged and not manual and not steering_only and not lane_change and not self.fault
+                 and forecast_available is not False)
     if not permitted:
       self.accel_since = None
       self.model_ok = False
+      self.geometry_clear_since = None
       return self._send(now, set_speed, False)
 
     if model is not None:
+      if self.last_accel_model_at is not None and now-self.last_accel_model_at > .2:
+        self.geometry_clear_since = None
       curve = measure_curve(model)
       path_blocked = bool(corridor_veto(model))
       branch_blocked = self.branch.update(now, self.ceiling, model, curve,
@@ -167,6 +177,21 @@ class AcknowledgedCurveSpeed:
       raw_geometric_demand = curve is not None and self.ceiling - math.sqrt(1.8 / curve.curvature) / MPH >= 2.
       self.geometry_restore_blocked = raw_geometric_demand
 
+      if forecast_authoritative:
+        # Preserve the bend's own minimum independently of a forecast cap.
+        # A forecast recovering upward must not erase a still-owned bend.
+        if geometry_active:
+          self.geometry_hold = min(self.geometry_hold if self.geometry_hold is not None else self.ceiling,
+                                   self.geometry_target)
+          self.geometry_clear_since = None
+        elif not geometric_demand and not raw_geometric_demand and lane_ok and not (path_blocked or branch_blocked):
+          if self.geometry_clear_since is None:
+            self.geometry_clear_since = now
+          if now-self.geometry_clear_since >= .4:
+            self.geometry_hold = None
+        else:
+          self.geometry_clear_since = None
+
       forecast = forecast_mph if forecast_mph is not None and math.isfinite(forecast_mph) else None
       if forecast is not None:
         self.forecast_target = min(self.ceiling, max(25., forecast))
@@ -188,15 +213,17 @@ class AcknowledgedCurveSpeed:
       acceleration_clear = self.accel_since is not None and now - self.accel_since >= .2
       # Fresh positive acceleration can release an old forecast, not a current
       # curve target. Missing/stale inputs alone are never a restoration cue.
-      if acceleration_clear and forecast is None and not geometric_demand and lane_ok and not path_blocked:
+      if not forecast_authoritative and acceleration_clear and forecast is None and not geometric_demand and lane_ok and not path_blocked:
         self.forecast_target = None
         self.forecast_owned = False
 
       forecast_restore = self.forecast_restore_active and forecast_clear and forecast is None and not raw_geometric_demand
       self.model_ok = not (path_blocked or branch_blocked) and (lane_ok or forecast is not None or forecast_restore)
+      reduction = (forecast_reduce_mph if forecast_authoritative and forecast_reduce_mph is not None
+                   and math.isfinite(forecast_reduce_mph) else self.forecast_target)
       self.current_demand = min(self.ceiling, self.geometry_target if qualified_geometry else self.ceiling,
-                                self.forecast_target if self.forecast_target is not None else self.ceiling)
-      active = geometry_active or self.forecast_target is not None
+                                reduction if reduction is not None else self.ceiling)
+      active = (self.geometry_hold is not None if forecast_authoritative else geometry_active) or self.forecast_target is not None
       self.clear_pending = False
       if active and self.model_ok:
         demand = min(self.ceiling, self.geometry_target if geometry_active else self.ceiling,
@@ -204,12 +231,19 @@ class AcknowledgedCurveSpeed:
         # An active slowdown episode may strengthen but never restore just
         # because its estimate weakens. Only the qualified clear path below
         # releases this minimum back to the driver's ceiling.
-        self.target = min(self.target if self.target is not None else self.ceiling, demand)
+        if forecast_authoritative:
+          # Owned future-speed recovery supplies a qualified cap, not an
+          # unconditional jump to the ceiling. Geometry has its own hold.
+          self.target = min(self.ceiling,
+                            self.geometry_hold if self.geometry_hold is not None else self.ceiling,
+                            self.forecast_target if self.forecast_target is not None else self.ceiling)
+        else:
+          self.target = min(self.target if self.target is not None else self.ceiling, demand)
         self.clear_since = None
-      elif self.model_ok and not geometric_demand and (forecast_clear or acceleration_clear):
+      elif self.model_ok and not geometric_demand and (forecast_clear or (acceleration_clear and not forecast_authoritative)):
         if self.clear_since is None:
           self.clear_since = now
-        if acceleration_clear or now - self.clear_since >= .4:
+        if forecast_authoritative or acceleration_clear or now - self.clear_since >= .4:
           self.target = float(self.ceiling)
         else:
           self.clear_pending = True
@@ -221,6 +255,11 @@ class AcknowledgedCurveSpeed:
       allowed = False
     if self.geometry_restore_blocked and (self.target > set_speed or
         (self.transport.pressed and self.transport.direction > 0)):
+      allowed = False
+    if (forecast_authoritative and self.target is not None and self.target < set_speed and
+        self.current_demand is not None and set_speed <= self.current_demand):
+      # The acknowledged setpoint already satisfies fresh evidence. Don't
+      # spend another decrement solely toward a historical episode minimum.
       allowed = False
     # OEM following/coasting remains authoritative; avoid a new SET- while
     # actual speed is already below the requested comfort target.

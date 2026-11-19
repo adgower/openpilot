@@ -36,7 +36,7 @@ class PredictedSpeedDemand:
     # the acceleration admission threshold does not prove the approach cleared.
     self.future_slowdown = False
 
-  def _future_speed(self, model, speed_mph):
+  def _future_speed(self, model, speed_mph, *, require_loss=True):
     times, speeds = list(model.velocity.t), list(model.velocity.x)
     if len(times) != len(speeds) or len(times) < 3:
       return None
@@ -53,7 +53,7 @@ class PredictedSpeedDemand:
     if not self.robust:
       return min(speed for _, speed in future)
     low = [(horizon, speed) for horizon, speed in future if speed <= speed_mph - 4.0]
-    if len(low) < 3 or low[-1][0] - low[0][0] < 1.0:
+    if require_loss and (len(low) < 3 or low[-1][0] - low[0][0] < 1.0):
       return math.inf
     ordered = sorted(speed for _, speed in future)
     rank = 0.2 * (len(ordered) - 1)
