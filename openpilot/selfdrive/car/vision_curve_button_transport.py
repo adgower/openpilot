@@ -45,6 +45,7 @@ class BoundedButtonTransport:
         self.next_press = -math.inf
         self.last_now = -math.inf
         self.pressed = False
+        self.next_repeat = -math.inf
         self.fault = False
 
     @property
@@ -101,6 +102,12 @@ class BoundedButtonTransport:
                 self.next_press = max(self.next_press, now + self.intervals[self.direction] - self.press_s)
                 return result(None, 'release', 'demand-changed')
             if now < self.press_until:
+                projected = self.observed + wanted * (self.debt[wanted] + 1)
+                if (now >= self.next_repeat and self.debt[wanted] < self.burst
+                        and self.floor <= projected <= self.ceiling and (projected-target)*wanted <= 0):
+                    self.debt[wanted] += 1
+                    self.next_repeat = now + .06
+                    return result('SET+' if wanted > 0 else 'SET-', 'press', 'repeat-pulse')
                 return result('SET+' if self.direction > 0 else 'SET-', 'press', 'holding-pulse')
             self.pressed = False
             self.next_press = max(self.next_press, now + self.intervals[self.direction] - self.press_s)
@@ -120,5 +127,6 @@ class BoundedButtonTransport:
         self.debt[wanted] += 1
         self.pressed = True
         self.press_until = now + self.press_s
+        self.next_repeat = now + .06
         self.next_press = now + self.intervals[wanted]
         return result('SET+' if wanted > 0 else 'SET-', 'press', 'new-pulse')

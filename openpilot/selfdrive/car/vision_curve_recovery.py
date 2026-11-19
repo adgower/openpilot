@@ -40,7 +40,7 @@ class AcknowledgedCurveSpeed:
     self.ceiling = self.observed = round(speed)
     self.target = float(self.ceiling)
     self.transport = BoundedButtonTransport(self.observed, ceiling_mph=self.ceiling,
-                                           minus_interval=.1, plus_interval=.1, press_s=.05, burst=3)
+                                           minus_interval=.18, plus_interval=.18, press_s=.13, burst=3)
     self.fault = False
     self.suspended = False
     self.resume_armed = False
@@ -71,7 +71,7 @@ class AcknowledgedCurveSpeed:
     # One emitted CAN button packet per ledger credit. The transport's
     # internal hold phase gates timing; 100 Hz callbacks must not turn a
     # single pulse credit into five independent button transmissions.
-    if out.button and out.reason == 'new-pulse':
+    if out.button and out.reason in ('new-pulse', 'repeat-pulse'):
       return out.button
     return '' if out.phase == 'release' else None
 

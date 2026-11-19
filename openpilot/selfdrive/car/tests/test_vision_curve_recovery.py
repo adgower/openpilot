@@ -31,8 +31,7 @@ class Rig:
                   'forecast_mph': forecast, 'forecast_clear': clear}
       args.update(kwargs)
       button = self.c.update(self.t, **args)
-      out = self.c.last_transport
-      if button and out.reason == 'new-pulse':
+      if button in ('SET+', 'SET-'):
         self.pulses.append((self.t, button))
         if ack:
           heapq.heappush(self.queue, (self.t + .05, 1 if button == 'SET+' else -1))
