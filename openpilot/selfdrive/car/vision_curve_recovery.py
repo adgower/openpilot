@@ -95,7 +95,7 @@ class AcknowledgedCurveSpeed:
     self.model_ok = False
     self.clear_pending = False
 
-  def _send(self, now, observed, allowed, *, can_assert=True):
+  def _send(self, now, observed, allowed, *, can_assert=True, allow_final_restore=True):
     if self.transport is None:
       return None
     # Off-road/invalid samples carry no new authoritative setpoint evidence.
@@ -116,7 +116,8 @@ class AcknowledgedCurveSpeed:
     if (allowed and self.carried_decrements and self.geometry_hold is not None and forecast_cannot_reduce
         and self.target is not None and self.target < display and not geometry_alone):
       can_assert = False
-    out = self.transport.update(now, round(observed), self.target or self.ceiling, allowed=allowed, can_assert=can_assert)
+    out = self.transport.update(now, round(observed), self.target or self.ceiling, allowed=allowed, can_assert=can_assert,
+                                allow_final_restore=allow_final_restore)
     acknowledged = max(0, before - self.transport.observed)
     if not self.transport.down_debt:
       self.carried_decrements = False
@@ -207,7 +208,7 @@ class AcknowledgedCurveSpeed:
              forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True,
              lateral_accel=math.inf, preview=None, early_hint_inhibited=False, opening_lead_clear=False, opening_lead_lateral_accel=math.inf,
              opening_motion_generation=None, opening_raw_lateral_accel=math.inf, following_clear=False,
-             cruise_state_valid=None, user_set_direction=0):
+             cruise_state_valid=None, user_set_direction=0, allow_final_restore=True):
     opening_lead_clear = opening_lead_clear and self.geometry_trimmed and self.transport is not None and not self.transport.down_debt
     if opening_lead_clear:
       trial_mph = self.opening_ack if self.opening_ack is not None else round(set_speed) + 1
@@ -540,5 +541,5 @@ class AcknowledgedCurveSpeed:
     # actual speed is already below the requested comfort target.
     if self.target is not None and self.target < set_speed and speed <= max(self.target, self.current_demand or self.target):
       allowed = False
-    return self._send(now, set_speed, allowed, can_assert=can_assert)
+    return self._send(now, set_speed, allowed, can_assert=can_assert, allow_final_restore=allow_final_restore)
 

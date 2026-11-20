@@ -51,6 +51,33 @@ def opening_load(now_ns, speed, requested_curvature, raw_load, compensated_load,
   return measured, True
 
 
+class FinalRestoreLeadCheck:
+  """After a closing lead, confirm clearance across distinct radar samples."""
+  def __init__(self):
+    self.waiting = False
+    self.clear_since = 0
+    self.last_sample = 0
+
+  def allowed(self, radar, sample_ns, fresh, speed, set_speed):
+    if not fresh:
+      self.waiting = True
+      self.clear_since = self.last_sample = 0
+      return False
+    closing = (speed + MPH < set_speed * MPH and any(lead.present and
+               (not math.isfinite(lead.dRel) or not math.isfinite(lead.vRel) or
+                (lead.dRel < 3.5 * speed and lead.vRel < 0.)) for lead in (radar.leadOne, radar.leadTwo)))
+    if closing:
+      self.waiting = True
+      self.clear_since = 0
+    elif self.waiting:
+      if not self.clear_since or sample_ns < self.last_sample or sample_ns - self.last_sample > 200_000_000:
+        self.clear_since = sample_ns
+      elif sample_ns - self.clear_since >= 100_000_000:
+        self.waiting = False
+    self.last_sample = sample_ns
+    return not self.waiting
+
+
 class VisionCurveContext:
   def __init__(self, *, comfort=False, motion=None):
     self.motion = motion
@@ -67,6 +94,7 @@ class VisionCurveContext:
     self.require_button_release = False
     self.release_edge = ReleaseEdgeFilter()
     self.used_switch_ns = 0
+    self.final_restore_lead = FinalRestoreLeadCheck()
     self.latest_neutral_ns = 0
     self.previous_neutral_ns = 0
 
@@ -244,6 +272,11 @@ class VisionCurveContext:
                                                     opening_lead_lateral_accel, motion)
           if corroborated:
             opening_motion_generation = motion['generation']
+    allow_final_restore = True
+    if self.comfort and self.cruise.ceiling is not None and 25 <= set_speed <= 95 and set_speed < self.cruise.ceiling:
+      # The last increase has no immediate benefit while Ford is following a
+      # slower lead below the current setting. Recheck on every fresh sample.
+      allow_final_restore = self.final_restore_lead.allowed(sm["radarState"] if radar_fresh else None, radar_ns, radar_fresh, speed, set_speed)
     button = self.cruise.update(now_ns / 1e9, engaged=engaged, valid=valid, manual=manual, override=override, set_speed=set_speed,
                               speed=speed / MPH, accel=accel, steering_only=steering_pressed, lane_change=lane_change,
                               model=new_model if (25 * MPH <= speed <= 95 * MPH or
@@ -254,7 +287,7 @@ class VisionCurveContext:
                               opening_raw_lateral_accel=raw_lateral_accel, following_clear=following_clear, comfort_hint_s=hint_s,
                               cruise_engaged=stock_enabled, cruise_state_valid=cruise_state_valid,
                               forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear,
-                              user_action=user_action, user_set_direction=user_set_direction,
+                              user_action=user_action, user_set_direction=user_set_direction, allow_final_restore=allow_final_restore,
                               override_kind='brake' if brake_pressed else 'gas' if gas_pressed else None,
                               can_assert=self.can_assert(now_ns, switch_ns, manual),
                               forecast_authoritative=self.comfort,

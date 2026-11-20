@@ -1,7 +1,64 @@
+from types import SimpleNamespace
+
 import pytest
 
+from openpilot.selfdrive.car.vision_curve_button_transport import BoundedButtonTransport
+from openpilot.selfdrive.car.vision_curve_context import FinalRestoreLeadCheck
 from openpilot.selfdrive.car.tests.test_vision_curve_recovery import Rig
 from openpilot.selfdrive.car.tests.test_vision_curve_session_reset import interrupt
+
+
+def test_closing_lead_requires_fresh_clear_samples_before_final_increase():
+  check = FinalRestoreLeadCheck()
+  lead = SimpleNamespace(present=True, dRel=60., vRel=-.9)
+  radar = SimpleNamespace(leadOne=SimpleNamespace(present=False), leadTwo=lead)
+
+  def allowed(ms, fresh=True):
+    return check.allowed(radar, ms * 1_000_000, fresh, speed=26., set_speed=69.)
+
+  assert not allowed(1000)
+  lead.vRel = .001
+  assert not allowed(1050)
+  assert not allowed(1050)  # Re-reading the same radar sample adds no evidence.
+  lead.vRel = -.01
+  assert not allowed(1100)
+  lead.present = False
+  assert not allowed(1150)
+  assert not allowed(1200, fresh=False)
+  assert not allowed(1300)
+  assert not allowed(1600)  # A gap requires a new clearance window.
+  assert not allowed(1650)
+  assert allowed(1700)
+
+
+def test_deferred_final_increase_keeps_receipts_and_allows_later_bends():
+  rig = Rig().run(2., forecast=69, clear=False)
+  mark = len(rig.pulses)
+  rig.run(3., clear=True, allow_final_restore=False)
+  assert rig.observed == 69 and not rig.pulses[mark:] and not rig.c.transport.pending
+  rig.run(2., forecast=65, clear=False, allow_final_restore=False)
+  assert rig.observed == 65
+  rig.run(3., clear=True, allow_final_restore=False)
+  assert rig.observed == 69 and not rig.c.transport.pending
+  mark = len(rig.pulses)
+  rig.run(1., clear=True)
+  assert rig.observed == 70 and [button for _, button in rig.pulses[mark:]] == ["SET+"]
+
+
+def test_traffic_defers_last_credit_with_delayed_display_for_new_and_repeated_presses():
+  transport = BoundedButtonTransport(68, ceiling_mph=70, press_s=.13, plus_interval=.18)
+  for tick in range(100):
+    out = transport.update(tick / 100., 68, 70, allow_final_restore=False)
+    if tick == 0:
+      assert out.reason == 'new-pulse'
+    else:
+      assert out.reason not in ('new-pulse', 'repeat-pulse')
+    assert transport.up_debt == 1
+  transport.update(1., 69, 70, allow_final_restore=False)
+  assert transport.up_debt == 0
+  assert transport.update(1.01, 69, 70).reason == 'new-pulse'
+  transport.update(1.06, 70, 70)
+  assert not transport.pending and not transport.fault
 
 
 @pytest.mark.parametrize("transition", ["cancel", "off", "resume", "resume_after_blank", "held_resume"])
