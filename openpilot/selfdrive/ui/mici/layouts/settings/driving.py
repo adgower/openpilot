@@ -43,8 +43,8 @@ class DrivingLayoutMici(NavScroller):
       self._personality_toggle,
       self._initial_cruise_speed,
       *self._navigator_toggles.values(),
-      ldw_toggle,
       always_on_dm_toggle,
+      ldw_toggle,
       enable_openpilot,
     ])
 
