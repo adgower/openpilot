@@ -47,6 +47,7 @@ class BoundedButtonTransport:
         self.pressed = False
         self.next_repeat = -math.inf
         self.fault = False
+        self.restore_ready_since = None
 
     @property
     def pending(self):
@@ -67,6 +68,8 @@ class BoundedButtonTransport:
         if not valid or now < self.last_now:
             self.fault = True
         if valid:
+            if now - self.last_now > self.press_s:
+                self.restore_ready_since = None
             self.last_now = now
         if manual:
             self.fault = True  # Caller must end/reconcile ownership; never recapture a lowered ceiling.
@@ -86,6 +89,16 @@ class BoundedButtonTransport:
         if self.fault:
             self.pressed = False
             return result(None, 'fault', 'unexplained-setpoint-change')
+        # A final up-step consumes the last available movement credit. Brief
+        # permission flicker can withdraw the wire level before Ford samples it.
+        # Settle before starting the press; driver input still ends it at once.
+        restoring = allowed and target_mph >= self.ceiling and self.observed < self.ceiling
+        if not restoring:
+            self.restore_ready_since = None
+        elif self.restore_ready_since is None:
+            self.restore_ready_since = now
+        if restoring and self.observed + self.up_debt + 1 == self.ceiling:
+            can_assert &= now - self.restore_ready_since >= self.press_s
         if not allowed:
             if self.pressed:
                 self.next_press = max(self.next_press, now + self.intervals[self.direction] - self.press_s)

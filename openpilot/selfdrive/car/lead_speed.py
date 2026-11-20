@@ -9,6 +9,29 @@ from bisect import bisect_left
 MPH = .44704
 
 
+def radar_is_aligned(model_ns, radar):
+  """Check the model timestamp carried by radar as well as Ford sensor health."""
+  try:
+    errors = radar.radarErrors
+    return (radar.mdMonoTime > 0 and 0 <= model_ns - radar.mdMonoTime <= 200_000_000
+            and not (errors.canError or errors.radarFault or errors.wrongConfig or errors.radarUnavailableTemporary))
+  except (AttributeError, TypeError):
+    return False
+
+
+def stable_following(radar, speed):
+  """Require reserve beyond a normal following gap over the 10 s camera horizon."""
+  try:
+    leads = (radar.leadOne, radar.leadTwo)
+    return any(lead.present for lead in leads) and all(
+      not lead.present or (math.isfinite(lead.dRel) and math.isfinite(lead.vRel)
+                           and math.isfinite(lead.modelProb) and lead.modelProb >= .7
+                           and lead.dRel + 10. * min(lead.vRel, 0.) >= 6. + 1.5 * speed)
+      for lead in leads)
+  except (AttributeError, TypeError):
+    return False
+
+
 class LeadSpeedDemand:
   def __init__(self, *, persistence=.6, release_dwell=.5, headway=1.5, standstill_gap=6.):
     self.persistence, self.release_dwell = persistence, release_dwell
@@ -54,9 +77,7 @@ class LeadSpeedDemand:
       m, r = self._payload(model, 'modelV2'), self._payload(radar, 'radarState')
       # Caller guarantees fresh valid envelopes; now is model logMonoTime.
       # mdMonoTime independently checks radar/model association freshness.
-      mn = int(now*1e9)
-      if not math.isfinite(r.mdMonoTime) or r.mdMonoTime <= 0 or not 0 <= mn-r.mdMonoTime <= 200_000_000 or any((r.radarErrors.canError, r.radarErrors.radarFault,
-                                                                                                 r.radarErrors.wrongConfig, r.radarErrors.radarUnavailableTemporary)):
+      if not radar_is_aligned(round(now * 1e9), r):
         return self._unavailable('source_alignment', now)
       present = r.leadOne.present or r.leadTwo.present
       if present:

@@ -1,5 +1,6 @@
-from openpilot.selfdrive.car.multi_signal_speed import MultiSignalDemand
-from openpilot.selfdrive.car.vision_curve_speed import COMFORT_APPROACH_DECEL, MPH
+from openpilot.selfdrive.car.lead_speed import radar_is_aligned, stable_following
+from openpilot.selfdrive.car.predicted_speed import AlphaEarlyHint
+from openpilot.selfdrive.car.vision_curve_speed import COMFORT_APPROACH_DECEL, MPH, measure_curve_preview
 from openpilot.selfdrive.car.vision_curve_recovery import AcknowledgedCurveSpeed
 
 class ReleaseEdgeFilter:
@@ -36,7 +37,7 @@ class VisionCurveContext:
     self.lane_changing = True
     self.comfort = comfort
     self.decel_since = None
-    self.prediction = MultiSignalDemand() if comfort else None
+    self.prediction = AlphaEarlyHint() if comfort else None
     self.forecast_mph = None
     self.forecast_clear = False
     self.forecast_data_valid = False
@@ -94,8 +95,11 @@ class VisionCurveContext:
     radar_fresh = False
     if self.comfort:
       radar_ns = sm.logMonoTime["radarState"]
-      radar_fresh = sm.valid["radarState"] and 0 <= now_ns - radar_ns <= 200_000_000
-    new_model = None
+      radar_fresh = (sm.valid["radarState"] and 0 <= now_ns - radar_ns <= 200_000_000 and
+                     radar_is_aligned(model_ns, sm["radarState"]))
+    lead_present = radar_fresh and (sm["radarState"].leadOne.present or sm["radarState"].leadTwo.present)
+    following_clear = False
+    new_model = preview = None
     hint_s = 0. if self.comfort else None
     if not (engaged and fresh_model):
       self.decel_since = None
@@ -113,7 +117,7 @@ class VisionCurveContext:
             lead.dRel >= 3.5 * state.vEgo and lead.dRel >= 20. * max(0., -lead.vRel)))
           forecast = max(((state.vEgo - v) / t for t, v in zip(model.velocity.t, model.velocity.x, strict=False)
                           if 3. <= t <= 10. and 0. <= v <= state.vEgo - 2 * MPH), default=0.) if clear and not model.action.shouldStop else 0.
-          if forecast < .25:
+          if model.action.desiredAcceleration > -.1 or forecast < .25:
             self.decel_since = None
           else:
             if self.decel_since is None:
@@ -128,6 +132,9 @@ class VisionCurveContext:
                  not (manual or override or state.steeringPressed or lane_change) and
                  str(state.gearShifter) == "drive" and not stock.nonAdaptive and
                  25 <= set_speed <= 95 and 0 <= state.vEgo <= 95 * MPH)
+      if new_model is not None:
+        preview = measure_curve_preview(new_model)
+        allowed &= preview[1]
       if user_action == 'set':
         self.prediction.reset()
       if new_model is not None:
@@ -135,9 +142,21 @@ class VisionCurveContext:
         self.forecast_mph = self.prediction.observe(model_ns / 1e9, state.vEgo / MPH,
                                                   self.cruise.ceiling or set_speed,
                                                   new_model, radar, allowed, state.aEgo)
-        self.forecast_data_valid = self.prediction.data_valid
+        self.forecast_data_valid = bool(preview and preview[1] and self.prediction.data_valid)
         self.forecast_clear = self.prediction.clear
+      if lead_present:
+        # A new lead can arrive between model frames. Ford owns following.
+        self.prediction.reduction_target = self.cruise.ceiling or set_speed
+        self.forecast_clear = False
+        # Following is still Ford's job when the bend that we slowed for has
+        # ended. Only qualify a geometry-owned return with healthy fresh leads.
+        if allowed and self.prediction.available and self.prediction.target is None:
+          action = sm["modelV2"].action
+          following_clear = (not action.shouldStop and action.desiredAcceleration > -.1
+                             and self.prediction.ego.detect_since is None and not self.prediction.ego.future_slowdown
+                             and stable_following(sm["radarState"], state.vEgo))
       if not allowed:
+        self.prediction.inhibit()
         self.forecast_mph = None
         self.forecast_clear = False
       if engaged:
@@ -148,7 +167,7 @@ class VisionCurveContext:
                               speed=state.vEgo / MPH, accel=state.aEgo, steering_only=state.steeringPressed, lane_change=lane_change,
                               model=new_model if (25 * MPH <= state.vEgo <= 95 * MPH or
                                                   (self.comfort and self.forecast_clear)) else None,
-                              comfort_hint_s=hint_s, cruise_engaged=stock.enabled,
+                              preview=preview, early_hint_inhibited=lead_present, following_clear=following_clear, comfort_hint_s=hint_s, cruise_engaged=stock.enabled,
                               forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear, user_action=user_action,
                               override_kind='brake' if state.brakePressed else 'gas' if state.gasPressed else None,
                               can_assert=self.can_assert(now_ns, switch_ns, manual),
@@ -159,10 +178,4 @@ class VisionCurveContext:
 
     if button in ('SET-', 'SET+'):
       self.used_switch_ns = switch_ns
-    if self.comfort:
-      if not allowed:
-        self.prediction.exit_since = None
-      elif new_model is not None and self.cruise.ceiling is not None:
-        self.prediction.release_ego_after_exit(now_ns / 1e9, state.vEgo / MPH, set_speed,
-                                               self.cruise.ceiling, self.cruise.geometry_clear_since)
     return self.release_edge.update(button)

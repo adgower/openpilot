@@ -49,7 +49,10 @@ class ContextFixture:
       laneLines=[SimpleNamespace(x=[0.0, 40.0, 80.0, 120.0, 160.0, 200.0], y=[offset] * 6) for offset in (-5.0, -1.8, 1.8, 5.0)],
       roadEdgeStds=[0.5, 0.5],
     )
-    self.sm["radarState"] = SimpleNamespace(leadOne=SimpleNamespace(present=False), leadTwo=SimpleNamespace(present=False))
+    self.sm["radarState"] = SimpleNamespace(
+      leadOne=SimpleNamespace(present=False), leadTwo=SimpleNamespace(present=False),
+      mdMonoTime=0, radarErrors=SimpleNamespace(canError=False, radarFault=False, wrongConfig=False, radarUnavailableTemporary=False),
+    )
     self.state = SimpleNamespace(
       canValid=True,
       vEgo=64.0 * MPH,
@@ -72,6 +75,7 @@ class ContextFixture:
     self.sm.logMonoTime["carControl"] = now
     if radar_fresh:
       self.sm.logMonoTime["radarState"] = now
+      self.sm["radarState"].mdMonoTime = self.sm.logMonoTime["modelV2"]
     # Ford's native cruise switch updates at 10 Hz, independently of the model callback.
     switch_ns = (now + 10_000_000) // 100_000_000 * 100_000_000 - 10_000_000
     self.parser.ts_nanos["Steering_Data_FD1"]["CcAslButtnSetIncPress"] = switch_ns
@@ -88,7 +92,7 @@ class ContextFixture:
 def test_forecast_qualifies_before_curve_with_low_lane_confidence():
   fixture = ContextFixture()
   values = fixture.qualify()
-  assert values["forecast_mph"] == pytest.approx(55.0)
+  assert values["forecast_mph"] == pytest.approx(63.0)  # Two-mph hint from the original 65 mph setting.
   assert not values["forecast_clear"]
 
 
@@ -158,7 +162,7 @@ def test_repeated_control_callbacks_do_not_reobserve_same_model():
   fixture.qualify()
   for index in range(1, 5):
     values = fixture.update(0.75 + index * 0.01, new_model=False)
-    assert values["forecast_mph"] == pytest.approx(55.0)
+    assert values["forecast_mph"] == pytest.approx(63.0)  # Two-mph hint from the original 65 mph setting.
 
 
 @pytest.mark.parametrize("attribute", ["gasPressed", "brakePressed", "steeringPressed", "leftBlinker", "rightBlinker"])
@@ -197,7 +201,7 @@ def test_fresh_lead_arrival_preserves_ego_forecast():
   fixture.qualify()
   fixture.sm["radarState"].leadTwo.present = True
   values = fixture.update(0.76, new_model=False)
-  assert values["forecast_mph"] == pytest.approx(55.0)
+  assert values["forecast_mph"] == pytest.approx(63.0)  # Two-mph hint from the original 65 mph setting.
   assert not values["forecast_clear"]
   assert values["valid"]
 
@@ -220,7 +224,7 @@ def test_model_gap_requires_new_forecast_persistence():
   assert not values["forecast_clear"]
   for index in range(23, 36):
     values = fixture.update(index * 0.05)
-  assert values["forecast_mph"] == pytest.approx(55.0)
+  assert values["forecast_mph"] == pytest.approx(63.0)  # Two-mph hint from the original 65 mph setting.
 
 
 def test_stop_intent_suspends_forecast_without_invalidating_data():

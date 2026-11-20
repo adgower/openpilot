@@ -105,3 +105,84 @@ class PredictedSpeedDemand:
     if self.target is not None:
       self.target = max(25.0, min(ceiling, self.target))
     return self.target
+
+
+class AlphaEarlyHint:
+  """Short preview from immediate model deceleration. Geometry owns sustained reductions."""
+
+  SPEND_SECONDS = 2.
+  CLEAR_SECONDS = .5
+  MAX_STEPS = 2
+
+  def __init__(self):
+    self.ego = PredictedSpeedDemand(raw_threshold=-.1)
+    self.reset()
+
+  def reset(self):
+    self.ego.reset()
+    self.target = self.started = self.clear_since = self.last_time = None
+    self.reduction_target = None
+    self.data_valid = self.available = self.clear = False
+    self.sources = {}
+
+  def inhibit(self):
+    # Interruptions can occur between model publications. Revoke unused
+    # precursor authority while retaining the driver's absolute reference.
+    self.ego.reset()
+    self.clear_since = self.started = None
+    self.reduction_target = None
+    self.available = self.clear = False
+
+  def observe(self, now, speed_mph, ceiling, model, radar, allowed, ego_accel=0.):
+    # Forecast validity and current button permission are separate so invalid
+    # input can never authorize a restoration or count toward a clear dwell.
+    gap = self.last_time is not None and not 0 < now - self.last_time <= .200001
+    self.last_time = now
+    if gap or not allowed:
+      self.inhibit()
+    estimate = self.ego.observe(now, speed_mph, ceiling, model, allowed, True)
+    self.data_valid = self.ego.data_valid and abs(model.velocity.t[-1] - 10.) <= .05
+    self.available = bool(allowed and self.data_valid and self.ego.available and radar is not None)
+    self.reduction_target = ceiling
+    self.clear = False
+    if not self.available:
+      self.clear_since = None
+      self.sources = {}
+      return None
+
+    accel = model.action.desiredAcceleration
+    lead_present = radar.leadOne.present or radar.leadTwo.present
+    cue = estimate is not None and self.ego.future_slowdown and accel <= -.1 and not lead_present
+    if self.target is None and cue and speed_mph >= 40.:
+      # Integrate two seconds of current deceleration once, referenced to the
+      # driver's ceiling. Falling ego/forecast speeds cannot renew the budget.
+      steps = max(1, min(self.MAX_STEPS, math.ceil(-accel * self.SPEND_SECONDS / MPH)))
+      target = max(25., ceiling - steps)
+      if speed_mph > target:
+        self.target = target
+        self.started = now
+    if self.target is not None:
+      if cue and self.started is not None and now - self.started <= self.SPEND_SECONDS:
+        self.reduction_target = self.target
+
+    # An absolute forecast at the driver's ceiling can establish recovery
+    # despite mild negative instantaneous acceleration. A flat forecast at
+    # the *reduced* setting is ambiguous; a fresh positive demand can clear it.
+    ceiling_supported = (not self.ego.future_slowdown and
+                         self.ego._future_speed(model, speed_mph, require_loss=False) >= ceiling - 1e-6)
+    release = not lead_present and (accel >= .1 or ceiling_supported)
+    if not release:
+      self.clear_since = None
+    elif self.clear_since is None:
+      self.clear_since = now
+    elif now - self.clear_since >= self.CLEAR_SECONDS - 1e-6:
+      self.target = self.started = None
+      self.clear = True
+    if self.ego.detect_since is not None and estimate is None:
+      # Don't republish a retained cap during fresh qualification after a gap.
+      self.sources = {}
+      return None
+    self.sources = {'ego': {'state': 'active' if self.target is not None else 'clear',
+                            'target': self.target, 'reason': 'alpha_early_hint' if self.target is not None else 'no_hint'},
+                    'lead': {'state': 'clear', 'target': None, 'reason': 'oem_acc'}}
+    return self.target

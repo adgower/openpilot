@@ -27,6 +27,9 @@ class AcknowledgedCurveSpeed:
     self.forecast_target = None
     self.geometry_target = None
     self.geometry_hold = self.geometry_clear_since = None
+    self.geometry_trimmed = False
+    self.all_decrements_geometry = False
+    self.following_clear_since = None
     self.current_demand = None
     self.detect_since = self.clear_since = self.accel_since = None
     self.curve_direction = None
@@ -47,6 +50,9 @@ class AcknowledgedCurveSpeed:
     self.forecast_owned = self.forecast_restore_active = False
     self.forecast_target = self.geometry_target = None
     self.geometry_hold = self.geometry_clear_since = None
+    self.geometry_trimmed = False
+    self.all_decrements_geometry = False
+    self.following_clear_since = None
     self.current_demand = float(self.ceiling)
     self.detect_since = self.clear_since = self.accel_since = None
     self.geometry_restore_blocked = False
@@ -59,13 +65,26 @@ class AcknowledgedCurveSpeed:
     # Off-road/invalid samples carry no new authoritative setpoint evidence.
     if not allowed and (not math.isfinite(observed) or not 25 <= observed <= 95):
       observed = self.transport.observed
+    before = self.transport.observed
+    outstanding = self.transport.down_debt
     out = self.transport.update(now, round(observed), self.target or self.ceiling, allowed=allowed, can_assert=can_assert)
+    acknowledged = max(0, before - self.transport.observed)
+    if acknowledged and allowed and self.all_decrements_geometry:
+      self.geometry_trimmed = True
+    # Source is attached at issuance. In a mixed group we cannot know which
+    # press Ford accepted; wait for a wholly geometric group before granting.
+    if out.button == 'SET-' and out.reason in ('new-pulse', 'repeat-pulse'):
+      geometry_only = self.geometry_hold is not None and self.forecast_target is None
+      self.all_decrements_geometry = geometry_only and (outstanding == acknowledged or self.all_decrements_geometry)
+    elif not self.transport.down_debt:
+      self.all_decrements_geometry = False
     self.last_transport = out
     self.observed = self.transport.observed
     self.pending = None
     self.fault |= self.transport.fault
     if self.observed >= self.ceiling and not self.transport.pending:
       self.forecast_restore_active = False
+      self.geometry_trimmed = False
     self.recovering = out.phase == 'wait'
     self.reason = out.reason
     # One emitted CAN button packet per ledger credit. The transport's
@@ -75,13 +94,22 @@ class AcknowledgedCurveSpeed:
       return out.button
     return '' if out.phase == 'release' else None
 
+  def _can_return_while_following(self, now, following_clear):
+    return (following_clear and self.geometry_trimmed and self.geometry_hold is None
+            and self.geometry_clear_since is not None and now - self.geometry_clear_since >= 2.5
+            and self.following_clear_since is not None and now - self.following_clear_since >= 1.
+            and not self.forecast_owned and self.forecast_target is None
+            and (not self.transport.down_debt or self.all_decrements_geometry))
+
   def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model,
              steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None,
-             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True):
+             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True, preview=None, early_hint_inhibited=False, following_clear=False):
     # No inhibited interval may contribute to geometric release evidence.
     if (not valid or not engaged or not cruise_engaged or manual or override or
         steering_only or lane_change or forecast_available is False or self.suspended):
       self.geometry_clear_since = None
+    if not following_clear or self.geometry_clear_since is None:
+      self.following_clear_since = None
     resume_edge = user_action == 'resume' and self.previous_user_action != 'resume'
     self.previous_user_action = user_action
     # A physical SET selection replaces intent only after button release and
@@ -144,6 +172,7 @@ class AcknowledgedCurveSpeed:
     permitted = (valid and engaged and not manual and not steering_only and not lane_change and not self.fault
                  and forecast_available is not False)
     if not permitted:
+      self.detect_since = None
       self.accel_since = None
       self.model_ok = False
       self.geometry_clear_since = None
@@ -152,7 +181,12 @@ class AcknowledgedCurveSpeed:
     if model is not None:
       if self.last_accel_model_at is not None and now-self.last_accel_model_at > .2:
         self.geometry_clear_since = None
-      curve, preview_valid = measure_curve_preview(model)
+      curve, preview_valid = preview if preview is not None else measure_curve_preview(model)
+      if forecast_authoritative and not preview_valid:
+        self.geometry_restore_blocked = True
+        self.detect_since = self.accel_since = self.geometry_clear_since = None
+        self.model_ok = False
+        return self._send(now, set_speed, False)
       traces = _corridor_traces(model)
       path_blocked = bool(corridor_veto(model, traces))
       branch_blocked = self.branch.update(now, self.ceiling, model, curve, traces)
@@ -215,6 +249,11 @@ class AcknowledgedCurveSpeed:
         self.forecast_target = None
         self.forecast_owned = False
 
+      if following_clear and self.geometry_trimmed and self.geometry_clear_since is not None:
+        if self.following_clear_since is None:
+          self.following_clear_since = now
+      else:
+        self.following_clear_since = None
       forecast_restore = self.forecast_restore_active and forecast_clear and forecast is None and not raw_geometric_demand
       self.model_ok = not (path_blocked or branch_blocked) and (lane_ok or forecast is not None or forecast_restore)
       reduction = (forecast_reduce_mph if forecast_authoritative and forecast_reduce_mph is not None
@@ -238,7 +277,7 @@ class AcknowledgedCurveSpeed:
         else:
           self.target = min(self.target if self.target is not None else self.ceiling, demand)
         self.clear_since = None
-      elif self.model_ok and not geometric_demand and (forecast_clear or (acceleration_clear and not forecast_authoritative)):
+      elif self.model_ok and not geometric_demand and (forecast_clear or self._can_return_while_following(now, following_clear) or (acceleration_clear and not forecast_authoritative)):
         if self.clear_since is None:
           self.clear_since = now
         if forecast_authoritative or acceleration_clear or now - self.clear_since >= .4:
@@ -249,6 +288,12 @@ class AcknowledgedCurveSpeed:
         self.clear_since = None
 
     allowed = self.model_ok and now >= self.override_until
+    if early_hint_inhibited and ((self.target > set_speed and not self._can_return_while_following(now, following_clear)) or
+        (self.target < set_speed and (self.geometry_hold is None or self.geometry_target is None
+                                      or set_speed <= self.geometry_target or speed <= self.geometry_target))):
+      # A fresh radar lead can arrive between model frames. Wait for Ford to
+      # handle following; only an independently qualified bend can spend SET-.
+      allowed = False
     if self.clear_pending and self.target < set_speed:
       allowed = False
     if self.geometry_restore_blocked and (self.target > set_speed or
