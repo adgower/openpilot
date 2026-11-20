@@ -42,6 +42,23 @@ class VisionCurveContext:
     self.forecast_data_valid = False
     self.shared_button_action = None
     self.release_edge = ReleaseEdgeFilter()
+    self.used_switch_ns = 0
+    self.latest_neutral_ns = 0
+    self.previous_neutral_ns = 0
+
+  def can_assert(self, now_ns, switch_ns, manual):
+    if manual and 0 < switch_ns <= now_ns:
+      self.used_switch_ns = max(self.used_switch_ns, switch_ns)
+    elif self.latest_neutral_ns < switch_ns <= now_ns and now_ns - switch_ns <= 25_000_000:
+      self.previous_neutral_ns, self.latest_neutral_ns = self.latest_neutral_ns, switch_ns
+    # The native switch reported neutral about every 100 ms on these drives.
+    # Select one tick early in that period. Timing is a delivery hypothesis.
+    return (not manual and switch_ns > self.used_switch_ns and
+            (not self.used_switch_ns or
+             (self.previous_neutral_ns > self.used_switch_ns and
+              75_000_000 <= switch_ns - self.previous_neutral_ns <= 125_000_000 and
+              switch_ns - self.used_switch_ns >= 180_000_000)) and
+            5_000_000 <= now_ns - switch_ns <= 25_000_000)
 
   def update(self, now_ns, sm, parser, state, control, metric):
     model_ns = sm.logMonoTime["modelV2"]
@@ -134,9 +151,18 @@ class VisionCurveContext:
                               comfort_hint_s=hint_s, cruise_engaged=stock.enabled,
                               forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear, user_action=user_action,
                               override_kind='brake' if state.brakePressed else 'gas' if state.gasPressed else None,
+                              can_assert=self.can_assert(now_ns, switch_ns, manual),
                               forecast_authoritative=self.comfort,
                               forecast_reduce_mph=self.prediction.reduction_target if self.comfort else None,
                               forecast_available=(self.prediction.available and state.vEgo > .1 and
                                                   not getattr(state, 'standstill', state.vEgo <= .1)) if self.comfort else None)
 
+    if button in ('SET-', 'SET+'):
+      self.used_switch_ns = switch_ns
+    if self.comfort:
+      if not allowed:
+        self.prediction.exit_since = None
+      elif new_model is not None and self.cruise.ceiling is not None:
+        self.prediction.release_ego_after_exit(now_ns / 1e9, state.vEgo / MPH, set_speed,
+                                               self.cruise.ceiling, self.cruise.geometry_clear_since)
     return self.release_edge.update(button)

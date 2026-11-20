@@ -24,6 +24,10 @@ class CaptureCruise:
   def ceiling(self):
     return self.controller.ceiling if self.controller is not None else None
 
+  @property
+  def geometry_clear_since(self):
+    return self.controller.geometry_clear_since if self.controller is not None else None
+
   def update(self, now, **kwargs):
     self.calls.append((now, kwargs))
     self.last_action = self.controller.update(now, **kwargs) if self.controller is not None else None
@@ -68,7 +72,9 @@ class ContextFixture:
     self.sm.logMonoTime["carControl"] = now
     if radar_fresh:
       self.sm.logMonoTime["radarState"] = now
-    self.parser.ts_nanos["Steering_Data_FD1"]["CcAslButtnSetIncPress"] = now
+    # Ford's native cruise switch updates at 10 Hz, independently of the model callback.
+    switch_ns = (now + 10_000_000) // 100_000_000 * 100_000_000 - 10_000_000
+    self.parser.ts_nanos["Steering_Data_FD1"]["CcAslButtnSetIncPress"] = switch_ns
     self.parser.ts_nanos["EngBrakeData"]["Veh_V_DsplyCcSet"] = now
     self.context.update(now, self.sm, self.parser, self.state, self.control, metric)
     return self.context.cruise.calls[-1][1]
@@ -84,6 +90,67 @@ def test_forecast_qualifies_before_curve_with_low_lane_confidence():
   values = fixture.qualify()
   assert values["forecast_mph"] == pytest.approx(55.0)
   assert not values["forecast_clear"]
+
+
+@pytest.mark.parametrize("block", [None, "bend", "weak_forecast", "radar_error", "missing_yaw", "nan_yaw", "bad_time"])
+def test_recover_original_setpoint_when_the_reduced_cruise_limits_the_forecast(block):
+  f = ContextFixture()
+  c = AcknowledgedCurveSpeed()
+  f.context.cruise = CaptureCruise(c)
+  radar = f.sm["radarState"]
+  radar.radarErrors = SimpleNamespace(canError=False, radarFault=False, wrongConfig=False, radarUnavailableTemporary=False)
+  model = f.sm["modelV2"]
+  model.laneLineProbs = [.1, .9, .9, .1]
+  f.state.cruiseState.speedCluster = 70 * MPH
+  f.state.vEgo = 69 * MPH
+
+  def frame(i):
+    radar.mdMonoTime = round((10 + i * .05) * 1e9)
+    f.update(i * .05)
+    button = f.context.cruise.last_action
+    if button in ("SET-", "SET+"):
+      f.state.cruiseState.speedCluster += MPH if button == "SET+" else -MPH
+    return button
+
+  for i in range(35):
+    frame(i)
+  lower = round(f.state.cruiseState.speedCluster / MPH)
+  assert 55 <= lower < 69
+  f.state.vEgo = (lower - 1) * MPH
+  model.velocity.x = [lower * MPH] * len(model.velocity.t)
+  model.velocity.x[-1] = (lower + .5) * MPH
+  model.action.desiredAcceleration = .15
+  if block == "bend":
+    model.orientationRate.z = [.12] * len(model.velocity.t)
+  elif block == "weak_forecast":
+    model.action.desiredAcceleration = 0.
+  elif block == "radar_error":
+    radar.radarErrors.radarFault = True
+  elif block == "missing_yaw":
+    model.orientationRate.z = []
+  elif block == "nan_yaw":
+    model.orientationRate.z[3] = float('nan')
+  elif block == "bad_time":
+    model.orientationRate.t[3] = model.orientationRate.t[2]
+  buttons = [frame(i) for i in range(35, 140)]
+  if block:
+    assert "SET+" not in buttons
+  else:
+    assert round(f.state.cruiseState.speedCluster / MPH) == 70
+    assert c.transport.pending == 0
+
+
+def test_native_switch_needs_an_observed_neutral_between_automatic_presses():
+  ctx = VisionCurveContext(comfort=True)
+  start = 1_000_000_000
+  assert ctx.can_assert(start + 10_000_000, start, False)
+  ctx.used_switch_ns = start
+  # A skipped native packet cannot count as the intervening neutral.
+  assert not ctx.can_assert(start + 210_000_000, start + 200_000_000, False)
+  assert ctx.can_assert(start + 310_000_000, start + 300_000_000, False)
+  # A physical switch press takes priority, including across repeated callbacks.
+  assert not ctx.can_assert(start + 310_000_000, start + 300_000_000, True)
+  assert not ctx.can_assert(start + 315_000_000, start + 300_000_000, False)
 
 
 def test_repeated_control_callbacks_do_not_reobserve_same_model():

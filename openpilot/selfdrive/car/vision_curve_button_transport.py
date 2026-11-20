@@ -60,7 +60,7 @@ class BoundedButtonTransport:
     def down_debt(self):
         return self.debt[-1]
 
-    def update(self, now, observed_mph, target_mph, *, allowed=True, manual=False):
+    def update(self, now, observed_mph, target_mph, *, allowed=True, manual=False, can_assert=True):
         def result(button, phase, reason):
             return Output(button, phase, reason, self.pending, self.ceiling)
         valid = all(math.isfinite(v) for v in (now, observed_mph, target_mph))
@@ -103,7 +103,7 @@ class BoundedButtonTransport:
                 return result(None, 'release', 'demand-changed')
             if now < self.press_until:
                 projected = self.observed + wanted * (self.debt[wanted] + 1)
-                if (now >= self.next_repeat and self.debt[wanted] < self.burst
+                if (can_assert and now >= self.next_repeat and self.debt[wanted] < self.burst
                         and self.floor <= projected <= self.ceiling and (projected-target)*wanted <= 0):
                     self.debt[wanted] += 1
                     self.next_repeat = now + .06
@@ -123,6 +123,8 @@ class BoundedButtonTransport:
         projected = self.observed + wanted * (self.debt[wanted] + 1)
         if not self.floor <= projected <= self.ceiling or (projected - target) * wanted > 0:
             return result(None, 'wait', 'reserved-target-or-boundary')
+        if not can_assert:
+            return result(None, 'wait', 'waiting-for-stock-neutral')
         self.direction = wanted
         self.debt[wanted] += 1
         self.pressed = True

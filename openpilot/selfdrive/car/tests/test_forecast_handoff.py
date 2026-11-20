@@ -19,7 +19,7 @@ def road(*, confidence=0.9, departure=False, bend=False):
     position=line(2.0 if departure else 0.0),
     roadEdgeStds=[0.5, 0.5],
     orientationRate=NS(t=times, z=[0.09 if bend else 0.0] * len(times)),
-    velocity=NS(x=[60 * MPH] * len(times)),
+    velocity=NS(t=times, x=[60 * MPH] * len(times)),
   )
 
 

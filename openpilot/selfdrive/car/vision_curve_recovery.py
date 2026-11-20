@@ -3,7 +3,7 @@ import math
 
 from openpilot.selfdrive.car.vision_curve_button_transport import BoundedButtonTransport
 from openpilot.selfdrive.car.vision_curve_speed import (
-  BranchContext, MPH, _corridor_traces, comfort_approach_mph, corridor_veto, measure_curve,
+  BranchContext, MPH, _corridor_traces, comfort_approach_mph, corridor_veto, measure_curve_preview,
 )
 
 
@@ -53,13 +53,13 @@ class AcknowledgedCurveSpeed:
     self.model_ok = False
     self.clear_pending = False
 
-  def _send(self, now, observed, allowed):
+  def _send(self, now, observed, allowed, *, can_assert=True):
     if self.transport is None:
       return None
     # Off-road/invalid samples carry no new authoritative setpoint evidence.
     if not allowed and (not math.isfinite(observed) or not 25 <= observed <= 95):
       observed = self.transport.observed
-    out = self.transport.update(now, round(observed), self.target or self.ceiling, allowed=allowed)
+    out = self.transport.update(now, round(observed), self.target or self.ceiling, allowed=allowed, can_assert=can_assert)
     self.last_transport = out
     self.observed = self.transport.observed
     self.pending = None
@@ -77,7 +77,7 @@ class AcknowledgedCurveSpeed:
 
   def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model,
              steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None,
-             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None):
+             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True):
     # No inhibited interval may contribute to geometric release evidence.
     if (not valid or not engaged or not cruise_engaged or manual or override or
         steering_only or lane_change or forecast_available is False or self.suspended):
@@ -93,18 +93,16 @@ class AcknowledgedCurveSpeed:
       observed = self.transport.observed if self.transport is not None else set_speed
       return self._send(now, observed, False)
     if self.selection_at is not None:
-      if now - self.manual_at < .4:
+      if now - self.manual_at < .4 or not valid or not 25 <= set_speed <= 95:
         observed = self.transport.observed if self.transport is not None else set_speed
         return self._send(now, observed, False)
       self.selection_at = None
-      if valid and 25 <= set_speed <= 95:
-        previous_transport = self.transport
-        self._start(set_speed)
-        if previous_transport is not None:
-          # Physical SET changes driver intent, not proof that old automatic
-          # presses were applied. Preserve every outstanding movement credit.
-          self.transport.debt = previous_transport.debt.copy()
-          self.transport.next_press = max(self.transport.next_press, previous_transport.next_press)
+      previous_transport = self.transport
+      self._start(set_speed)
+      if previous_transport is not None:
+        # A new driver selection cannot acknowledge an earlier synthetic press.
+        self.transport.debt = previous_transport.debt.copy()
+        self.transport.next_press = max(self.transport.next_press, previous_transport.next_press)
     if resume_edge and (self.suspended or not cruise_engaged):
       # A RES tap while already active must not authorize a later unrelated
       # suspension. Retain a genuine RES edge preceding OEM engagement.
@@ -154,10 +152,10 @@ class AcknowledgedCurveSpeed:
     if model is not None:
       if self.last_accel_model_at is not None and now-self.last_accel_model_at > .2:
         self.geometry_clear_since = None
-      curve = measure_curve(model)
-      path_blocked = bool(corridor_veto(model))
-      branch_blocked = self.branch.update(now, self.ceiling, model, curve,
-                                         _corridor_traces(model))
+      curve, preview_valid = measure_curve_preview(model)
+      traces = _corridor_traces(model)
+      path_blocked = bool(corridor_veto(model, traces))
+      branch_blocked = self.branch.update(now, self.ceiling, model, curve, traces)
       lane_ok = len(model.laneLineProbs) >= 3 and min(list(model.laneLineProbs)[1:3]) >= .55
       qualified_geometry = curve is not None and lane_ok and not (path_blocked or branch_blocked)
       raw = (comfort_approach_mph(model, curve, speed, comfort_hint_s or 0.)
@@ -175,7 +173,7 @@ class AcknowledgedCurveSpeed:
       # Admission dwell delays reduction, never permits restoration into a
       # newly observed bend. Also release a currently held SET+ immediately.
       raw_geometric_demand = curve is not None and self.ceiling - math.sqrt(1.8 / curve.curvature) / MPH >= 2.
-      self.geometry_restore_blocked = raw_geometric_demand
+      self.geometry_restore_blocked = raw_geometric_demand or not preview_valid
 
       if forecast_authoritative:
         # Preserve the bend's own minimum independently of a forecast cap.
@@ -184,7 +182,7 @@ class AcknowledgedCurveSpeed:
           self.geometry_hold = min(self.geometry_hold if self.geometry_hold is not None else self.ceiling,
                                    self.geometry_target)
           self.geometry_clear_since = None
-        elif not geometric_demand and not raw_geometric_demand and lane_ok and not (path_blocked or branch_blocked):
+        elif not geometric_demand and not self.geometry_restore_blocked and lane_ok and not (path_blocked or branch_blocked):
           if self.geometry_clear_since is None:
             self.geometry_clear_since = now
           if now-self.geometry_clear_since >= .4:
@@ -265,5 +263,5 @@ class AcknowledgedCurveSpeed:
     # actual speed is already below the requested comfort target.
     if self.target is not None and self.target < set_speed and speed <= max(self.target, self.current_demand or self.target):
       allowed = False
-    return self._send(now, set_speed, allowed)
+    return self._send(now, set_speed, allowed, can_assert=can_assert)
 

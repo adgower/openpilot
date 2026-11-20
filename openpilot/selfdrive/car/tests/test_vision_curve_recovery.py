@@ -215,6 +215,19 @@ class SharedSwitchTest(unittest.TestCase):
 
 
 class DriverSelectionRegressionTest(unittest.TestCase):
+  def test_physical_set_during_data_gap_recaptures_first_valid_selection(self):
+    c = Controller()
+    c._start(70)
+    c.transport.debt[1] = 1
+    args = dict(engaged=True, manual=False, override=False, set_speed=65, speed=65,
+                accel=0., model=None, cruise_engaged=True)
+    c.update(1., user_action='set', valid=True, **args)
+    c.update(1.5, valid=False, **args)
+    c.update(2., valid=True, **args)
+    self.assertEqual(c.ceiling, 65)
+    self.assertFalse(c.fault)
+    self.assertEqual(c.transport.up_debt, 1)
+
   def test_driver_selection_does_not_permanently_disable_future_curve_control(self):
     c = Controller()
     c._start(70)

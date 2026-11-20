@@ -1,6 +1,6 @@
 """Local multi-signal speed-cap experiment; no actuator or button authority."""
 import math
-from openpilot.selfdrive.car.predicted_speed import PredictedSpeedDemand
+from openpilot.selfdrive.car.predicted_speed import MPH, PredictedSpeedDemand
 from openpilot.selfdrive.car.lead_speed import LeadSpeedDemand
 
 
@@ -29,6 +29,8 @@ class MultiSignalDemand:
     self.lead_raise_since = self.lead_raise_min = None
     self.ego_hold_target = None
     self.raise_since = self.raise_min = None
+    self.exit_since = None
+    self.ego_recovering = False
 
   def observe(self, now, speed_mph, ceiling, model, radar, allowed, ego_accel=0.):
     # Numerical validity and permission are distinct. Ownership survives a
@@ -39,6 +41,8 @@ class MultiSignalDemand:
       self.lead.reset()
       self.ego_clear_since = self.ceiling_clear_since = None
       self.raise_since = self.raise_min = None
+      self.exit_since = None
+    self.ego_recovering = False
     self.last_time = now
     ego_target = self.ego.observe(now, speed_mph, ceiling, model, allowed, True)
     self.data_valid = self.ego.data_valid
@@ -69,6 +73,12 @@ class MultiSignalDemand:
         not (ego_target is None and self.ego.future_slowdown)):
       absolute = self.ego._future_speed(model, speed_mph, require_loss=False)
       if absolute is not None and math.isfinite(absolute):
+        # A cruise-limited vehicle can forecast acceleration without predicting
+        # the driver's entire pre-bend set speed.
+        self.ego_recovering = (not self.ego.qualified and not self.ego.future_slowdown
+                               and model.action.desiredAcceleration >= .1 and absolute >= speed_mph
+                               and abs(model.velocity.t[-1] - 10.) < .05
+                               and model.velocity.x[-1] >= (speed_mph + 1.) * MPH)
         held = self.ego_hold_target if self.ego_hold_target is not None else ceiling
         if absolute >= ceiling-1e-6:
           if self.ceiling_clear_since is None:
@@ -159,3 +169,17 @@ class MultiSignalDemand:
     self.state = 'active' if self.target is not None else 'clear' if self.clear else 'unavailable'
     self.reason = 'minimum_qualified_cap' if self.target is not None else 'fresh_sources_clear' if self.clear else 'awaiting_source_evidence'
     return self.target
+
+  def release_ego_after_exit(self, now, speed, set_speed, ceiling, geometry_clear_since):
+    ready = (self.available and self.ego_recovering and 'ego' in self.owners
+             and self.use_lead and self.sources['lead']['state'] == 'clear'
+             and geometry_clear_since is not None and now >= geometry_clear_since
+             and set_speed < ceiling and abs(speed - set_speed) <= 2.)
+    if not ready:
+      self.exit_since = None
+    elif self.exit_since is None:
+      self.exit_since = now
+    elif now - self.exit_since >= self.clear_dwell:
+      # The next model frame recomputes demand and permissions before a SET+.
+      self.owners.discard('ego')
+      self.ego_hold_target = self.exit_since = None

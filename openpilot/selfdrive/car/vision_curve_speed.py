@@ -43,12 +43,23 @@ class Curve:
 
 def measure_curve(model):
     """Look for a same-direction bend over the full model prediction."""
+    return measure_curve_preview(model)[0]
+
+
+def measure_curve_preview(model):
+    """Return the measured bend and whether the available preview can confirm a clear exit."""
     orientation = model.orientationRate
     times = list(orientation.t)
     yaw = list(orientation.z)
     velocity = list(model.velocity.x)
     if not (len(times) == len(yaw) == len(velocity)) or len(times) < 6:
-        return None
+        return None, False
+
+    speed_times = list(getattr(model.velocity, 't', ()))
+    valid = (times == speed_times and 0 <= times[0] <= .6 and abs(times[-1] - MODEL_PREVIEW_SECONDS) <= .05
+             and all(0 < b - a <= 3. for a, b in zip(times, times[1:]))
+             and all(math.isfinite(rate) for rate in yaw)
+             and all(math.isfinite(speed) and speed >= 0. for speed in velocity))
 
     best = None
     probs = model.laneLineProbs
@@ -80,7 +91,7 @@ def measure_curve(model):
         if sign:
             run.append(abs(curvature))
         previous = t
-    return best
+    return best, valid
 
 
 def _corridor_traces(model):
