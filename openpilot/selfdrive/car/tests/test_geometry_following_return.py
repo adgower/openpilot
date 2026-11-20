@@ -121,3 +121,72 @@ def test_unacknowledged_geometry_or_inherited_manual_session_cannot_grant_return
   c.target = c.geometry_hold = 50
   c._send(.6,69,True,can_assert=False)
   assert not c.geometry_trimmed
+
+
+@pytest.mark.parametrize('block', [None, 'speed', 'lateral_load', 'next_bend', 'lead', 'brake', 'steering', 'radar_gap', 'model_stop'])
+def test_opening_bend_earns_one_step_after_settling(block):
+  f, m, c = setup_geometry()
+  f.state.yawRate = .01
+  for i in range(110):
+    tick(f, i)
+  floor = round(f.state.cruiseState.speedCluster / MPH)
+  assert floor < 65
+  f.state.vEgo = (floor - .5) * MPH
+  m.velocity.x = [f.state.vEgo] * 6
+  m.orientationRate.z = [f.state.vEgo * 1.5 / ((floor + 5) * MPH) ** 2] * 6
+  if block == 'speed':
+    f.state.vEgo = (floor + 12) * MPH
+  elif block == 'lateral_load':
+    f.state.yawRate = .15
+  elif block == 'next_bend':
+    m.orientationRate.z[1] = -.16
+  elif block == 'lead':
+    f.sm['radarState'].leadTwo = following()
+  elif block == 'brake':
+    f.state.brakePressed = True
+  elif block == 'steering':
+    f.state.steeringPressed = True
+  elif block == 'model_stop':
+    m.action.shouldStop = True
+  steps = []
+  for i in range(110, 190):
+    if block == 'radar_gap':
+      f.sm.valid['radarState'] = i % 12 != 0
+    action = tick(f, i)
+    if action == 'SET+':
+      steps.append(i)
+  if block:
+    assert not steps
+  else:
+    assert steps and steps[0] >= 129
+    assert all(b - a >= 19 for a, b in zip(steps, steps[1:]))
+    assert floor < round(f.state.cruiseState.speedCluster / MPH) <= floor + 4
+    m.orientationRate.z = [.19] * 6
+    assert all(tick(f, i) != 'SET+' for i in range(190, 215))
+
+
+def test_deferred_bend_allows_one_step_but_near_bend_withholds_it():
+  _, m, c = setup_geometry()
+  c._start(70)
+  c.geometry_hold, c.geometry_target = 43., 50.
+  velocity = 43. * MPH
+  m.velocity.x = [velocity] * 6
+  m.orientationRate.z = [.055] * 6
+  m.orientationRate.z[-1] = -.09
+  assert c._opening_step(0., 43., 43., 1., m) is None
+  assert c._opening_step(1., 43., 43., 1., m) == 44
+  m.orientationRate.z[1] = -.09
+  assert c._opening_step(1.05, 43., 43., 1., m) is None
+
+
+def test_only_acknowledgement_can_raise_working_curve_floor():
+  c = AcknowledgedCurveSpeed()
+  c._start(70)
+  c.transport.observed = c.observed = 46
+  c.geometry_hold, c.geometry_target = 43., 50.
+  c.opening_step = c.target = 47
+  assert c._send(0., 46, True) == 'SET+'
+  c._send(.2, 46, False)
+  assert c.geometry_hold == 43 and c.opening_ack == 47
+  c._send(.25, 47, False)
+  assert c.geometry_hold == 47 and c.opening_ack is None

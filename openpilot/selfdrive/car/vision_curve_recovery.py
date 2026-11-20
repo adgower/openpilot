@@ -3,7 +3,7 @@ import math
 
 from openpilot.selfdrive.car.vision_curve_button_transport import BoundedButtonTransport
 from openpilot.selfdrive.car.vision_curve_speed import (
-  BranchContext, MPH, _corridor_traces, comfort_approach_mph, corridor_veto, measure_curve_preview,
+  BranchContext, COMFORT_APPROACH_DECEL, COMFORT_LATERAL_ACCEL, COMFORT_RESPONSE_TIME, MPH, _corridor_traces, comfort_approach_mph, corridor_veto, measure_curve_preview,
 )
 
 
@@ -28,6 +28,7 @@ class AcknowledgedCurveSpeed:
     self.geometry_target = None
     self.geometry_hold = self.geometry_clear_since = None
     self.geometry_trimmed = False
+    self.opening_since = self.opening_step = self.opening_ack = None
     self.all_decrements_geometry = False
     self.following_clear_since = None
     self.current_demand = None
@@ -51,6 +52,7 @@ class AcknowledgedCurveSpeed:
     self.forecast_target = self.geometry_target = None
     self.geometry_hold = self.geometry_clear_since = None
     self.geometry_trimmed = False
+    self.opening_since = self.opening_step = self.opening_ack = None
     self.all_decrements_geometry = False
     self.following_clear_since = None
     self.current_demand = float(self.ceiling)
@@ -78,6 +80,15 @@ class AcknowledgedCurveSpeed:
       self.all_decrements_geometry = geometry_only and (outstanding == acknowledged or self.all_decrements_geometry)
     elif not self.transport.down_debt:
       self.all_decrements_geometry = False
+    if self.opening_ack is not None and self.transport.observed > before:
+      # Only a reported setpoint increase can replace the old minimum. A
+      # fresh tighter curve still takes priority on the next model frame.
+      if self.transport.observed == self.opening_ack and self.geometry_hold is not None:
+        self.geometry_hold = max(self.geometry_hold, min(self.opening_ack, self.geometry_target))
+      self.opening_ack = None
+    if self.opening_step is not None and out.button == 'SET+' and out.reason in ('new-pulse', 'repeat-pulse'):
+      self.opening_ack = self.opening_step
+      self.opening_since = self.opening_step = None
     self.last_transport = out
     self.observed = self.transport.observed
     self.pending = None
@@ -101,13 +112,37 @@ class AcknowledgedCurveSpeed:
             and not self.forecast_owned and self.forecast_target is None
             and (not self.transport.down_debt or self.all_decrements_geometry))
 
+  def _opening_step(self, now, display, speed, lateral_accel, model):
+    # A partial return must fit both the currently measured turn and every
+    # forecast turn, including an opposite-direction bend farther ahead.
+    next_mph = round(display) + 1
+    next_speed_sq = (next_mph * MPH) ** 2
+    buffered_speed_sq = ((next_mph + 1) * MPH) ** 2
+    approach = 2. * COMFORT_APPROACH_DECEL * speed * MPH
+    supported = (self.geometry_hold is not None and next_mph < self.ceiling and
+                 self.geometry_target >= max(next_mph + 2., speed + 1.) and abs(speed - display) <= 3. and
+                 not model.action.shouldStop and model.action.desiredAcceleration >= .1 and
+                 abs(lateral_accel) * max(next_speed_sq, (speed * MPH) ** 2) <= COMFORT_LATERAL_ACCEL * (speed * MPH) ** 2 and
+                 all(velocity >= 5. and
+                     abs(rate) * (buffered_speed_sq - approach * max(0., t - COMFORT_RESPONSE_TIME)) <= COMFORT_LATERAL_ACCEL * velocity
+                     for t, rate, velocity in zip(model.orientationRate.t, model.orientationRate.z, model.velocity.x, strict=True)))
+    if not supported:
+      self.opening_since = None
+      return None
+    if self.opening_since is None:
+      self.opening_since = now
+    return next_mph if now - self.opening_since >= 1. else None
+
   def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model,
              steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None,
-             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True, preview=None, early_hint_inhibited=False, following_clear=False):
+             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True, lateral_accel=math.inf, preview=None, early_hint_inhibited=False, following_clear=False):
     # No inhibited interval may contribute to geometric release evidence.
     if (not valid or not engaged or not cruise_engaged or manual or override or
         steering_only or lane_change or forecast_available is False or self.suspended):
       self.geometry_clear_since = None
+      self.opening_since = self.opening_step = self.opening_ack = None
+    if early_hint_inhibited:
+      self.opening_since = self.opening_step = self.opening_ack = None
     if not following_clear or self.geometry_clear_since is None:
       self.following_clear_since = None
     resume_edge = user_action == 'resume' and self.previous_user_action != 'resume'
@@ -130,6 +165,7 @@ class AcknowledgedCurveSpeed:
       if previous_transport is not None:
         # A new driver selection cannot acknowledge an earlier synthetic press.
         self.transport.debt = previous_transport.debt.copy()
+        self.transport.reserve_down_slot = previous_transport.reserve_down_slot
         self.transport.next_press = max(self.transport.next_press, previous_transport.next_press)
     if resume_edge and (self.suspended or not cruise_engaged):
       # A RES tap while already active must not authorize a later unrelated
@@ -179,11 +215,13 @@ class AcknowledgedCurveSpeed:
       return self._send(now, set_speed, False)
 
     if model is not None:
+      self.opening_step = None
       if self.last_accel_model_at is not None and now-self.last_accel_model_at > .2:
-        self.geometry_clear_since = None
+        self.geometry_clear_since = self.opening_since = self.opening_ack = None
       curve, preview_valid = preview if preview is not None else measure_curve_preview(model)
       if forecast_authoritative and not preview_valid:
         self.geometry_restore_blocked = True
+        self.opening_since = self.opening_ack = None
         self.detect_since = self.accel_since = self.geometry_clear_since = None
         self.model_ok = False
         return self._send(now, set_speed, False)
@@ -195,6 +233,8 @@ class AcknowledgedCurveSpeed:
       raw = (comfort_approach_mph(model, curve, speed, comfort_hint_s or 0.)
              if qualified_geometry else self.ceiling)
       self.geometry_target = max(25., min(self.ceiling, raw))
+      if self.opening_ack is not None and (not qualified_geometry or self.geometry_target < self.opening_ack):
+        self.opening_ack = None
       geometric_demand = qualified_geometry and self.ceiling - self.geometry_target >= 2.
       if geometric_demand:
         if self.detect_since is None or curve.direction != self.curve_direction:
@@ -262,18 +302,24 @@ class AcknowledgedCurveSpeed:
                                 reduction if reduction is not None else self.ceiling)
       active = (self.geometry_hold is not None if forecast_authoritative else geometry_active) or self.forecast_target is not None
       self.clear_pending = False
+      if not (active and self.model_ok and geometry_active):
+        self.opening_since = None
       if active and self.model_ok:
         demand = min(self.ceiling, self.geometry_target if geometry_active else self.ceiling,
                      self.forecast_target if self.forecast_target is not None else self.ceiling)
-        # An active slowdown episode may strengthen but never restore just
-        # because its estimate weakens. Only the qualified clear path below
-        # releases this minimum back to the driver's ceiling.
+        # A change in the forecast alone cannot release the minimum. While a
+        # bend remains active, earn one step at a time from fresh headroom.
         if forecast_authoritative:
           # Owned future-speed recovery supplies a qualified cap, not an
           # unconditional jump to the ceiling. Geometry has its own hold.
-          self.target = min(self.ceiling,
-                            self.geometry_hold if self.geometry_hold is not None else self.ceiling,
-                            self.forecast_target if self.forecast_target is not None else self.ceiling)
+          if geometry_active and not early_hint_inhibited and forecast_available and not self.forecast_owned and now >= self.override_until:
+            self.opening_step = self._opening_step(now, set_speed, speed, lateral_accel, model)
+          else:
+            self.opening_since = None
+          curve_cap = self.geometry_hold if self.geometry_hold is not None else self.ceiling
+          if self.opening_step is not None:
+            curve_cap = max(curve_cap, self.opening_step)
+          self.target = min(self.ceiling, curve_cap, self.forecast_target if self.forecast_target is not None else self.ceiling)
         else:
           self.target = min(self.target if self.target is not None else self.ceiling, demand)
         self.clear_since = None
@@ -296,7 +342,7 @@ class AcknowledgedCurveSpeed:
       allowed = False
     if self.clear_pending and self.target < set_speed:
       allowed = False
-    if self.geometry_restore_blocked and (self.target > set_speed or
+    if (self.geometry_restore_blocked or self.geometry_hold is not None) and self.opening_step is None and (self.target > set_speed or
         (self.transport.pressed and self.transport.direction > 0)):
       allowed = False
     if (forecast_authoritative and self.target is not None and self.target < set_speed and

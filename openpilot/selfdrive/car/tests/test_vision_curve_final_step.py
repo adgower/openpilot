@@ -76,3 +76,66 @@ def test_driver_set_preserves_inflight_credit():
   cruise.update(.65, user_action=None, set_speed=70, **args)
   assert cruise.ceiling == 70 and cruise.transport.up_debt == 1
   assert all(cruise._send(tick / 100,70,True) != "SET+" for tick in range(66,120))
+
+
+@pytest.mark.parametrize("first_press_missed", [False, True])
+def test_restored_cruise_keeps_one_decrement_available_for_the_next_bend(first_press_missed):
+  transport = BoundedButtonTransport(70)
+  observed = 70
+  tick = 0
+
+  def run(target, duration, *, receive=True, allowed=True):
+    nonlocal observed, tick
+    commands = []
+    for _ in range(duration):
+      tick += 1
+      out = transport.update(tick / 100, observed, target, allowed=allowed)
+      assert not transport.fault
+      assert transport.floor <= observed - transport.down_debt
+      assert observed + transport.up_debt <= transport.ceiling
+      assert transport.down_debt <= transport.burst
+      if issued(out):
+        commands.append(out.button)
+        if receive:
+          observed += 1 if out.button == "SET+" else -1
+    return commands
+
+  # Ford followed the reduction, then ignored two presses. Preserve both in
+  # case they execute later; leave headroom for a subsequent acknowledged bend.
+  assert run(65, 250) == ["SET-"] * 5
+  assert run(55, 300, receive=False) == ["SET-"] * 2
+  assert run(70, 400) == ["SET+"] * 5
+  assert observed == 70 and transport.down_debt == 2
+  assert not run(60, 100, allowed=False)
+  if first_press_missed:
+    assert run(60, 500, receive=False) == ["SET-"]
+    assert transport.down_debt == 3
+    assert not run(55, 1000)
+    observed -= 1  # One real, late receipt opens one slot.
+  run(60, 500)
+  assert observed == 62 and transport.down_debt == 2
+  # After reversal, all old decrements can still arrive as one display jump.
+  # Their receipt is not a new driver selection and cannot create extra SET+.
+  assert run(70, 1000) == ["SET+"] * 8
+  observed -= 2
+  assert run(70, 500) == ["SET+"] * 2
+  assert observed == 70 and transport.pending == 0
+
+
+def test_manual_selection_does_not_release_reserved_decrement_slot():
+  cruise = AcknowledgedCurveSpeed()
+  cruise._start(70)
+  transport = cruise.transport
+  assert issued(transport.update(0., 70, 65))
+  transport.update(.05, 69, 65)
+  for tick in range(6, 100):
+    transport.update(tick / 100, 69, 60)
+  assert transport.down_debt == 2 and transport.reserve_down_slot
+
+  args = dict(engaged=True, valid=True, manual=False, override=False, speed=69.,
+              accel=0., model=None, cruise_engaged=True)
+  cruise.update(1., set_speed=68., user_action="set", **args)
+  cruise.update(1.5, set_speed=68., **args)
+  assert cruise.ceiling == 68
+  assert cruise.transport.down_debt == 2 and cruise.transport.reserve_down_slot
+  assert not issued(cruise.transport.update(2., 68, 60))

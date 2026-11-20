@@ -48,6 +48,7 @@ class BoundedButtonTransport:
         self.next_repeat = -math.inf
         self.fault = False
         self.restore_ready_since = None
+        self.reserve_down_slot = False
 
     @property
     def pending(self):
@@ -86,6 +87,10 @@ class BoundedButtonTransport:
             else:
                 self.debt[ack_direction] -= int(abs(delta))
                 self.observed = observed_mph
+                if delta < 0 and not self.down_debt:
+                    self.reserve_down_slot = True
+                elif delta > 0 and self.observed == self.ceiling:
+                    self.reserve_down_slot = False
         if self.fault:
             self.pressed = False
             return result(None, 'fault', 'unexplained-setpoint-change')
@@ -107,6 +112,12 @@ class BoundedButtonTransport:
             return result(None, 'release', 'inhibited')
         target = min(self.ceiling, max(self.floor, int(target_mph)))
         wanted = (target > self.observed) - (target < self.observed)
+        # Once Ford catches up with the decrements, leave one credit for another
+        # bend. An acknowledged return to the ceiling makes that slot usable
+        # while older decrements remain reserved against the new target.
+        burst = self.burst
+        if wanted < 0 and self.reserve_down_slot:
+            burst = max(1, burst - 1)
         if self.pressed:
             # A changed demand (or an ACK reaching it) must clear the old
             # level immediately; already-issued movement credit stays owed.
@@ -116,7 +127,7 @@ class BoundedButtonTransport:
                 return result(None, 'release', 'demand-changed')
             if now < self.press_until:
                 projected = self.observed + wanted * (self.debt[wanted] + 1)
-                if (can_assert and now >= self.next_repeat and self.debt[wanted] < self.burst
+                if (can_assert and now >= self.next_repeat and self.debt[wanted] < burst
                         and self.floor <= projected <= self.ceiling and (projected-target)*wanted <= 0):
                     self.debt[wanted] += 1
                     self.next_repeat = now + .06
@@ -129,7 +140,7 @@ class BoundedButtonTransport:
             return result(None, 'idle', 'target-observed')
         if now < self.next_press:
             return result(None, 'release', 'release-dwell')
-        if self.debt[wanted] >= self.burst:
+        if self.debt[wanted] >= burst:
             return result(None, 'wait', 'burst-awaiting-progress')
         # Every emitted pulse remains a potential movement until observed. No
         # timeout may forgive its credit: delayed pulses could all still apply.

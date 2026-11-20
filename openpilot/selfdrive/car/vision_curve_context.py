@@ -1,3 +1,5 @@
+import math
+
 from openpilot.selfdrive.car.lead_speed import radar_is_aligned, stable_following
 from openpilot.selfdrive.car.predicted_speed import AlphaEarlyHint
 from openpilot.selfdrive.car.vision_curve_speed import COMFORT_APPROACH_DECEL, MPH, measure_curve_preview
@@ -167,6 +169,7 @@ class VisionCurveContext:
                               speed=state.vEgo / MPH, accel=state.aEgo, steering_only=state.steeringPressed, lane_change=lane_change,
                               model=new_model if (25 * MPH <= state.vEgo <= 95 * MPH or
                                                   (self.comfort and self.forecast_clear)) else None,
+                              lateral_accel=state.vEgo * getattr(state, 'yawRate', math.inf) if new_model is not None and self.comfort else math.inf,
                               preview=preview, early_hint_inhibited=lead_present, following_clear=following_clear, comfort_hint_s=hint_s, cruise_engaged=stock.enabled,
                               forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear, user_action=user_action,
                               override_kind='brake' if state.brakePressed else 'gas' if state.gasPressed else None,
