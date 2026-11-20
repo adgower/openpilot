@@ -205,12 +205,21 @@ class VisionCurveContext:
         valid &= radar_fresh and self.forecast_data_valid
     # Drop pending authority on model loss while engaged. A clean
     # disengagement clears the session even if the model is unavailable.
+    opening_lead_clear = (following_clear and all(not lead.present or (lead.dRel >= max(55., 3. * speed) and lead.vRel >= 1.5)
+                                  for lead in (sm["radarState"].leadOne, sm["radarState"].leadTwo)))
+    opening_lead_lateral_accel = math.inf
+    if opening_lead_clear:
+      comp_ns = parser.ts_nanos.get("BrakeSnData_3", {}).get("VehYawComp_W_Actl", 0)
+      comp_dps = parser.vl.get("BrakeSnData_3", {}).get("VehYawComp_W_Actl", math.nan)
+      # Ford marks the two highest unsigned words as no data and fault.
+      if 0 < comp_ns <= now_ns and now_ns - comp_ns <= 100_000_000 and -75. <= comp_dps <= 4093 * .03663 - 75.:
+        opening_lead_lateral_accel = speed * math.radians(comp_dps)
     button = self.cruise.update(now_ns / 1e9, engaged=engaged, valid=valid, manual=manual, override=override, set_speed=set_speed,
                               speed=speed / MPH, accel=accel, steering_only=steering_pressed, lane_change=lane_change,
                               model=new_model if (25 * MPH <= speed <= 95 * MPH or
                                                   (self.comfort and self.forecast_clear)) else None,
-                              lateral_accel=lateral_accel,
-                              preview=preview, early_hint_inhibited=lead_present, following_clear=following_clear, comfort_hint_s=hint_s, cruise_engaged=stock_enabled, cruise_state_valid=cruise_state_valid,
+                              lateral_accel=lateral_accel, opening_lead_lateral_accel=opening_lead_lateral_accel,
+                              preview=preview, early_hint_inhibited=lead_present, opening_lead_clear=opening_lead_clear, following_clear=following_clear, comfort_hint_s=hint_s, cruise_engaged=stock_enabled, cruise_state_valid=cruise_state_valid,
                               forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear, user_action=user_action, user_set_direction=user_set_direction,
                               override_kind='brake' if brake_pressed else 'gas' if gas_pressed else None,
                               can_assert=self.can_assert(now_ns, switch_ns, manual),

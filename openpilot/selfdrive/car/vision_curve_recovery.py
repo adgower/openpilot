@@ -17,6 +17,7 @@ class AcknowledgedCurveSpeed:
     self.ceiling = self.observed = self.pending = None
     self.transport = self.last_transport = None
     self.fault = False
+    self.debt_free_display_fault = False
     self.recovering = False
     self.retries = set()
     self.forecast_owned = False
@@ -39,6 +40,7 @@ class AcknowledgedCurveSpeed:
     self.geometry_hold = self.geometry_clear_since = None
     self.geometry_trimmed = False
     self.opening_since = self.opening_step = self.opening_ack = None
+    self.opening_had_lead = False
     self.all_decrements_geometry = False
     self.carried_decrements = False
     self.following_clear_since = None
@@ -56,6 +58,7 @@ class AcknowledgedCurveSpeed:
     self.transport = BoundedButtonTransport(self.observed, ceiling_mph=self.ceiling,
                                            minus_interval=.18, plus_interval=.18, press_s=.13, burst=3)
     self.fault = False
+    self.debt_free_display_fault = False
     self.suspended = False
     self.resume_armed = False
     self.all_decrements_geometry = False
@@ -73,6 +76,7 @@ class AcknowledgedCurveSpeed:
     self.forecast_target = self.geometry_target = None
     self.geometry_hold = self.geometry_clear_since = None
     self.opening_since = self.opening_step = self.opening_ack = None
+    self.opening_had_lead = False
     self.following_clear_since = None
     self.curve_direction = self.last_accel_model_at = None
     self.detect_since = self.clear_since = self.accel_since = None
@@ -128,6 +132,10 @@ class AcknowledgedCurveSpeed:
     self.last_transport = out
     self.observed = self.transport.observed
     self.pending = None
+    if self.transport.fault and not self.fault:
+      self.resume_armed = False
+      self.debt_free_display_fault = (out.reason == "unexplained-setpoint-change" and not self.transport.pending
+                                      and self.transport.floor <= display <= self.ceiling)
     self.fault |= self.transport.fault
     if self.observed >= self.ceiling and not self.transport.pending:
       self.forecast_restore_active = False
@@ -184,7 +192,11 @@ class AcknowledgedCurveSpeed:
 
   def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model,
              steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None,
-             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True, lateral_accel=math.inf, preview=None, early_hint_inhibited=False, following_clear=False, cruise_state_valid=None, user_set_direction=0):
+             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True, lateral_accel=math.inf, preview=None, early_hint_inhibited=False, opening_lead_clear=False, opening_lead_lateral_accel=math.inf, following_clear=False, cruise_state_valid=None, user_set_direction=0):
+    opening_lead_clear = opening_lead_clear and self.geometry_trimmed and self.transport is not None and not self.transport.down_debt
+    if opening_lead_clear:
+      trial_mph = self.opening_ack if self.opening_ack is not None else round(set_speed) + 1
+      opening_lead_clear = speed > 0. and abs(opening_lead_lateral_accel) * max(1., (trial_mph / speed) ** 2) <= COMFORT_LATERAL_ACCEL
     # No inhibited interval may contribute to geometric release evidence.
     if (not valid or not engaged or not cruise_engaged or manual or override or
         steering_only or lane_change or forecast_available is False or self.suspended):
@@ -193,8 +205,9 @@ class AcknowledgedCurveSpeed:
     # A Ford yaw or speed sample can change after the last model frame but
     # before a neutral button frame arrives. Revoke the earned step at once.
     motion_display = self.opening_ack - 1 if self.opening_ack is not None else set_speed
-    if early_hint_inhibited or ((self.opening_since is not None or self.opening_ack is not None) and
-                                not self._motion_allows_step(motion_display, speed, lateral_accel)):
+    opening_in_progress = self.opening_since is not None or self.opening_ack is not None or self.opening_step is not None
+    if (early_hint_inhibited and not opening_lead_clear) or (opening_in_progress and
+        (self.opening_had_lead != early_hint_inhibited or not self._motion_allows_step(motion_display, speed, lateral_accel))):
       self.opening_since = self.opening_step = self.opening_ack = None
     if not following_clear or self.geometry_clear_since is None:
       self.following_clear_since = None
@@ -213,19 +226,22 @@ class AcknowledgedCurveSpeed:
       self.selection_at = None
     if self.resume_armed and now > self.resume_until:
       self.resume_armed = False
+    needs_reconciliation = self.selection_ambiguous or self.fault
     if resume_edge and self.suspended and not stopped:
-      if not self.selection_ambiguous or (native_off and self.transport is not None and not self.transport.pending):
+      eligible_fault = not self.fault or self.debt_free_display_fault
+      if not needs_reconciliation or (native_off and eligible_fault and self.transport is not None and not self.transport.pending):
         self.resume_armed = True
         self.resume_until = now + DRIVER_REENGAGE_WINDOW
     if self.resume_armed and native_on:
-      # A deliberate OEM restart can re-establish the previously verified
-      # ceiling after a contradictory driver reading only with no unpaid moves.
-      if (self.selection_ambiguous and self.transport is not None and not self.transport.pending
+      # After a debt-free display disagreement, only a physical RES with Ford
+      # already off and its original set speed confirmed on restart clears it.
+      if (needs_reconciliation and self.transport is not None and not self.transport.pending
+          and (not self.fault or self.debt_free_display_fault)
           and 25 <= set_speed <= 95 and round(set_speed) == self.ceiling):
         self.selection_ambiguous = False
         self._start(self.ceiling)
         self.override_until = max(self.override_until, now + .4)
-      if not self.selection_ambiguous:
+      if not self.selection_ambiguous and not self.fault:
         # Ford can accept RES before radar, the model or lateral control recover.
         self.suspended = self.resume_armed = False
 
@@ -347,6 +363,13 @@ class AcknowledgedCurveSpeed:
       raw_geometric_demand = curve is not None and self.ceiling - math.sqrt(1.8 / curve.curvature) / MPH >= 2.
       self.geometry_restore_blocked = raw_geometric_demand or not preview_valid
 
+      # Finish an already-started one-mph return when the model sees the bend end.
+      # The one-second evidence window and full-path/motion checks still run. Keep
+      # this handoff shorter than the ordinary following-clear recovery delay.
+      carry_opening = (opening_lead_clear and self.geometry_hold is not None and lane_ok and
+                       not (geometric_demand or self.geometry_restore_blocked or path_blocked or branch_blocked) and
+                       (self.opening_since is not None or self.opening_ack is not None) and
+                       (self.geometry_clear_since is None or now - self.geometry_clear_since < 1.))
       if forecast_authoritative:
         # Preserve the bend's own minimum independently of a forecast cap.
         # A forecast recovering upward must not erase a still-owned bend.
@@ -357,7 +380,7 @@ class AcknowledgedCurveSpeed:
         elif not geometric_demand and not self.geometry_restore_blocked and lane_ok and not (path_blocked or branch_blocked):
           if self.geometry_clear_since is None:
             self.geometry_clear_since = now
-          if now-self.geometry_clear_since >= .4:
+          if now-self.geometry_clear_since >= .4 and not carry_opening:
             self.geometry_hold = None
         else:
           self.geometry_clear_since = None
@@ -400,7 +423,7 @@ class AcknowledgedCurveSpeed:
                                 reduction if reduction is not None else self.ceiling)
       active = (self.geometry_hold is not None if forecast_authoritative else geometry_active) or self.forecast_target is not None
       self.clear_pending = False
-      opening_allowed = (active and self.model_ok and geometry_active and not early_hint_inhibited
+      opening_allowed = (active and self.model_ok and (geometry_active or carry_opening) and (not early_hint_inhibited or opening_lead_clear)
                          and forecast_available and not self.forecast_owned and now >= self.override_until)
       if not opening_allowed:
         self.opening_since = self.opening_ack = None
@@ -413,10 +436,11 @@ class AcknowledgedCurveSpeed:
           # Owned future-speed recovery supplies a qualified cap, not an
           # unconditional jump to the ceiling. Geometry has its own hold.
           if opening_allowed:
+            self.opening_had_lead = early_hint_inhibited
             self.opening_step = self._opening_step(now, set_speed, speed, lateral_accel, model)
           curve_cap = self.geometry_hold if self.geometry_hold is not None else self.ceiling
           if self.opening_step is not None:
-            curve_cap = max(curve_cap, self.opening_step)
+            curve_cap = self.opening_step if early_hint_inhibited else max(curve_cap, self.opening_step)
           self.target = min(self.ceiling, curve_cap, self.forecast_target if self.forecast_target is not None else self.ceiling)
         else:
           self.target = min(self.target if self.target is not None else self.ceiling, demand)
@@ -434,7 +458,8 @@ class AcknowledgedCurveSpeed:
     if self.target is None:
       return self._send(now, set_speed, False)
     allowed = self.model_ok and now >= self.override_until
-    if early_hint_inhibited and ((self.target > set_speed and not self._can_return_while_following(now, following_clear)) or
+    opening_with_lead = opening_lead_clear and self.opening_step is not None and self.target <= round(set_speed) + 1
+    if early_hint_inhibited and ((self.target > set_speed and not (opening_with_lead or self._can_return_while_following(now, following_clear))) or
         (self.target < set_speed and (self.geometry_hold is None or self.geometry_target is None
                                       or set_speed <= self.geometry_target or speed <= self.geometry_target))):
       # A fresh radar lead can arrive between model frames. Wait for Ford to

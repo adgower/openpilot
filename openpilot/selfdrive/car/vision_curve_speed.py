@@ -16,6 +16,11 @@ COMFORT_RESPONSE_TIME = 1.5
 def comfort_approach_mph(model, curve, speed_mph, hint_s):
     """Use upcoming curvature to estimate an approach speed for OEM cruise."""
     speed = speed_mph * MPH
+    # Smoothly taper the approach preference with the comfortable speed implied by the curve.
+    # The original measured-load and next-step release checks still use COMFORT_LATERAL_ACCEL.
+    nominal_curve_mph = math.sqrt(COMFORT_LATERAL_ACCEL / curve.curvature) / MPH
+    tight_fraction = max(0., min(1., (55. - nominal_curve_mph) / 15.))
+    approach_lateral_accel = COMFORT_LATERAL_ACCEL + .15 * tight_fraction
     bound = math.inf
     for t, rate, velocity in zip(model.orientationRate.t, model.orientationRate.z, model.velocity.x, strict=True):
         if t < curve.first_horizon_s:
@@ -26,7 +31,7 @@ def comfort_approach_mph(model, curve, speed_mph, hint_s):
         if curvature < .0009:
             break
         time_to_slow = max(0., t - COMFORT_RESPONSE_TIME - hint_s)
-        curve_speed_sq = COMFORT_LATERAL_ACCEL / min(curvature, curve.curvature)
+        curve_speed_sq = approach_lateral_accel / min(curvature, curve.curvature)
         bound = min(bound, curve_speed_sq + 2. * COMFORT_APPROACH_DECEL * speed * time_to_slow)
     # Retain the reference admission timing. Comfort can lower its target.
     reference_mph = math.sqrt(1.8 / curve.curvature) / MPH
