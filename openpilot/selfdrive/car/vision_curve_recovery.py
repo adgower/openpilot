@@ -121,10 +121,10 @@ class AcknowledgedCurveSpeed:
       # fresh tighter curve still takes priority on the next model frame.
       if self.transport.observed == self.opening_ack and self.geometry_hold is not None:
         self.geometry_hold = max(self.geometry_hold, min(self.opening_ack, self.geometry_target))
-      self.opening_ack = None
+      self.opening_ack = self.opening_step = self.opening_since = None
     if self.opening_step is not None and out.button == 'SET+' and out.reason in ('new-pulse', 'repeat-pulse'):
       self.opening_ack = self.opening_step
-      self.opening_since = self.opening_step = None
+      self.opening_since = None
     self.last_transport = out
     self.observed = self.transport.observed
     self.pending = None
@@ -150,25 +150,34 @@ class AcknowledgedCurveSpeed:
 
   def _motion_allows_step(self, display, speed, lateral_accel):
     next_mph = round(display) + 1
-    return (self.geometry_target is not None and self.geometry_target >= max(next_mph + 2., speed + 1.) and
+    # Keep a full mph above the trial speed while a qualified easing persists.
+    # The buffered 10-second path and measured load still gate every sample.
+    in_progress = self.opening_since is not None or (self.opening_ack == next_mph and self.transport.pressed)
+    reserve = 1. if in_progress else 2.
+    return (self.geometry_target is not None and self.geometry_target >= max(next_mph + reserve, speed + 1.) and
             speed > 0. and abs(speed - display) <= 3. and
             abs(lateral_accel) * max(1., (next_mph / speed) ** 2) <= COMFORT_LATERAL_ACCEL)
 
   def _opening_step(self, now, display, speed, lateral_accel, model):
     # A partial return must fit both the currently measured turn and every
     # forecast turn, including an opposite-direction bend farther ahead.
-    next_mph = round(display) + 1
+    # A fresh preview may arrive on the same tick as Ford's receipt. Check
+    # the issued speed before its receipt can raise the bend minimum.
+    next_mph = self.opening_ack if self.opening_ack is not None else round(display) + 1
     buffered_speed_sq = ((next_mph + 1) * MPH) ** 2
     approach = 2. * COMFORT_APPROACH_DECEL * speed * MPH
     supported = (self.geometry_hold is not None and next_mph < self.ceiling and
-                 self._motion_allows_step(display, speed, lateral_accel) and
+                 round(display) in (next_mph - 1, next_mph) and
+                 self._motion_allows_step(next_mph - 1, speed, lateral_accel) and
                  not model.action.shouldStop and model.action.desiredAcceleration >= .1 and
                  all(velocity >= 5. and
                      abs(rate) * (buffered_speed_sq - approach * max(0., t - COMFORT_RESPONSE_TIME)) <= COMFORT_LATERAL_ACCEL * velocity
                      for t, rate, velocity in zip(model.orientationRate.t, model.orientationRate.z, model.velocity.x, strict=True)))
     if not supported:
-      self.opening_since = None
+      self.opening_since = self.opening_ack = None
       return None
+    if self.opening_ack is not None:
+      return next_mph if self.transport.pressed and round(display) < next_mph else None
     if self.opening_since is None:
       self.opening_since = now
     return next_mph if now - self.opening_since >= 1. else None
@@ -183,8 +192,9 @@ class AcknowledgedCurveSpeed:
       self.opening_since = self.opening_step = self.opening_ack = None
     # A Ford yaw or speed sample can change after the last model frame but
     # before a neutral button frame arrives. Revoke the earned step at once.
-    if early_hint_inhibited or (self.opening_since is not None and
-                                not self._motion_allows_step(set_speed, speed, lateral_accel)):
+    motion_display = self.opening_ack - 1 if self.opening_ack is not None else set_speed
+    if early_hint_inhibited or ((self.opening_since is not None or self.opening_ack is not None) and
+                                not self._motion_allows_step(motion_display, speed, lateral_accel)):
       self.opening_since = self.opening_step = self.opening_ack = None
     if not following_clear or self.geometry_clear_since is None:
       self.following_clear_since = None
@@ -390,8 +400,10 @@ class AcknowledgedCurveSpeed:
                                 reduction if reduction is not None else self.ceiling)
       active = (self.geometry_hold is not None if forecast_authoritative else geometry_active) or self.forecast_target is not None
       self.clear_pending = False
-      if not (active and self.model_ok and geometry_active):
-        self.opening_since = None
+      opening_allowed = (active and self.model_ok and geometry_active and not early_hint_inhibited
+                         and forecast_available and not self.forecast_owned and now >= self.override_until)
+      if not opening_allowed:
+        self.opening_since = self.opening_ack = None
       if active and self.model_ok:
         demand = min(self.ceiling, self.geometry_target if geometry_active else self.ceiling,
                      self.forecast_target if self.forecast_target is not None else self.ceiling)
@@ -400,10 +412,8 @@ class AcknowledgedCurveSpeed:
         if forecast_authoritative:
           # Owned future-speed recovery supplies a qualified cap, not an
           # unconditional jump to the ceiling. Geometry has its own hold.
-          if geometry_active and not early_hint_inhibited and forecast_available and not self.forecast_owned and now >= self.override_until:
+          if opening_allowed:
             self.opening_step = self._opening_step(now, set_speed, speed, lateral_accel, model)
-          else:
-            self.opening_since = None
           curve_cap = self.geometry_hold if self.geometry_hold is not None else self.ceiling
           if self.opening_step is not None:
             curve_cap = max(curve_cap, self.opening_step)
