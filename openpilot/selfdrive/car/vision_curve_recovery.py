@@ -26,8 +26,10 @@ class AcknowledgedCurveSpeed:
     self.override_until = -math.inf
     self.suspended = False
     self.resume_armed = False
+    self.awaiting_native_display = False
     self.resume_until = -math.inf
     self.previous_user_action = None
+    self.native_display = None
     self.selection_at = None
     self.selection_engaged = False
     self.selection_display = None
@@ -40,6 +42,10 @@ class AcknowledgedCurveSpeed:
     self.geometry_hold = self.geometry_clear_since = None
     self.geometry_trimmed = False
     self.opening_since = self.opening_step = self.opening_ack = None
+    self.opening_motion_generation = self.motion_generation = None
+    self.motion_since = -math.inf
+    self.opening_last_bend_at = -math.inf
+    self.opening_direction = None
     self.opening_had_lead = False
     self.all_decrements_geometry = False
     self.carried_decrements = False
@@ -61,6 +67,7 @@ class AcknowledgedCurveSpeed:
     self.debt_free_display_fault = False
     self.suspended = False
     self.resume_armed = False
+    self.awaiting_native_display = False
     self.all_decrements_geometry = False
     self.carried_decrements = False
     self._clear_demand()
@@ -76,6 +83,10 @@ class AcknowledgedCurveSpeed:
     self.forecast_target = self.geometry_target = None
     self.geometry_hold = self.geometry_clear_since = None
     self.opening_since = self.opening_step = self.opening_ack = None
+    self.opening_motion_generation = self.motion_generation = None
+    self.motion_since = -math.inf
+    self.opening_last_bend_at = -math.inf
+    self.opening_direction = None
     self.opening_had_lead = False
     self.following_clear_since = None
     self.curve_direction = self.last_accel_model_at = None
@@ -192,7 +203,11 @@ class AcknowledgedCurveSpeed:
 
   def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model,
              steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None,
-             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True, lateral_accel=math.inf, preview=None, early_hint_inhibited=False, opening_lead_clear=False, opening_lead_lateral_accel=math.inf, following_clear=False, cruise_state_valid=None, user_set_direction=0):
+             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None,
+             forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True,
+             lateral_accel=math.inf, preview=None, early_hint_inhibited=False, opening_lead_clear=False, opening_lead_lateral_accel=math.inf,
+             opening_motion_generation=None, opening_raw_lateral_accel=math.inf, following_clear=False,
+             cruise_state_valid=None, user_set_direction=0):
     opening_lead_clear = opening_lead_clear and self.geometry_trimmed and self.transport is not None and not self.transport.down_debt
     if opening_lead_clear:
       trial_mph = self.opening_ack if self.opening_ack is not None else round(set_speed) + 1
@@ -206,9 +221,15 @@ class AcknowledgedCurveSpeed:
     # before a neutral button frame arrives. Revoke the earned step at once.
     motion_display = self.opening_ack - 1 if self.opening_ack is not None else set_speed
     opening_in_progress = self.opening_since is not None or self.opening_ack is not None or self.opening_step is not None
+    if self.motion_generation != opening_motion_generation:
+      self.motion_generation = opening_motion_generation
+      self.motion_since = now
+    if not opening_in_progress:
+      self.opening_motion_generation = None
+    motion_lost = self.opening_motion_generation is not None and self.opening_motion_generation != opening_motion_generation
     if (early_hint_inhibited and not opening_lead_clear) or (opening_in_progress and
-        (self.opening_had_lead != early_hint_inhibited or not self._motion_allows_step(motion_display, speed, lateral_accel))):
-      self.opening_since = self.opening_step = self.opening_ack = None
+        (motion_lost or self.opening_had_lead != early_hint_inhibited or not self._motion_allows_step(motion_display, speed, lateral_accel))):
+      self.opening_since = self.opening_step = self.opening_ack = self.opening_motion_generation = None
     if not following_clear or self.geometry_clear_since is None:
       self.following_clear_since = None
     resume_edge = user_action == 'resume' and self.previous_user_action != 'resume'
@@ -217,7 +238,11 @@ class AcknowledgedCurveSpeed:
     native_valid = valid if cruise_state_valid is None else cruise_state_valid
     native_on = native_valid and cruise_engaged
     native_off = native_valid and not cruise_engaged
+    preceding_display = self.native_display
+    self.native_display = round(set_speed) if native_on and 25 <= set_speed <= 95 else None
     stopped = user_action == 'cancel' or (override and override_kind != 'gas')
+    if stopped or native_off or user_action == 'resume':
+      self.awaiting_native_display = True
     entering_suspend = self.ceiling is not None and not self.suspended and (stopped or native_off)
     if entering_suspend or stopped:
       self.selection_ambiguous |= self.selection_at is not None or (stopped and user_action == 'set')
@@ -260,11 +285,16 @@ class AcknowledgedCurveSpeed:
         self.selection_at = self.manual_at = now
         if native_on and 25 <= set_speed <= 95:
           display = round(set_speed)
-          if self.selection_display is None or user_set_direction * (display - self.selection_display) >= 0:
-            self.selection_display = display
-          elif self.transport is not None and abs(display - self.selection_display) <= self.transport.debt[-user_set_direction]:
-            # An outstanding move could explain this wrong-direction change.
+          previous = preceding_display if set_edge else self.selection_display
+          delta = display - previous if previous is not None else 0
+          pending = self.transport.debt[1 if delta > 0 else -1] if delta and self.transport is not None else 0
+          same_direction = user_set_direction * delta >= 0
+          if pending and (abs(delta) <= pending or (not set_edge and same_direction)):
+            # The old command could account for the movement, or contribute to
+            # a series of changes while the driver holds the same button.
             self.selection_ambiguous = True
+          elif self.selection_display is None or same_direction:
+            self.selection_display = display
           # Otherwise keep the last consistent reading and let the physical
           # hold finish. A transient contradiction cannot become the ceiling.
     elif self.selection_at is not None and native_on and self.transport is not None and 25 <= set_speed <= 95:
@@ -285,9 +315,14 @@ class AcknowledgedCurveSpeed:
         self._clear_demand()
 
     selecting = user_action == 'set' or self.selection_at is not None or self.selection_ambiguous
+    if self.awaiting_native_display and native_valid and not selecting and self.transport is not None and 25 <= set_speed <= self.ceiling:
+      # Ford can restore its own display at cancel or re-engagement. Even a
+      # matching rise cannot retire an outstanding SET+ here.
+      self.transport.observe_resume_display(round(set_speed))
+      if native_on and not self.suspended and user_action != 'resume':
+        self.awaiting_native_display = False
     if stopped or user_action == 'set' or self.selection_ambiguous or not native_on or (self.suspended and not selecting):
-      # A driver SET owns the display delta; it cannot acknowledge an older
-      # synthetic press. Ordinary brake/off can coincide with a genuine receipt.
+      # A driver SET owns the display delta until the new selection settles.
       display = self.transport.observed if self.transport is not None and (selecting or not native_valid) else set_speed
       release = self._send(now, display, False)
       if entering_suspend:
@@ -366,8 +401,17 @@ class AcknowledgedCurveSpeed:
       # Finish an already-started one-mph return when the model sees the bend end.
       # The one-second evidence window and full-path/motion checks still run. Keep
       # this handoff shorter than the ordinary following-clear recovery delay.
+      # A curve that briefly straddles the ordinary two-mph threshold may
+      # finish an already-qualified step only within the same bend and with
+      # independent motion throughout the original evidence window.
+      continuous_motion = (opening_motion_generation is not None and
+                           (self.opening_motion_generation == opening_motion_generation or
+                            (self.opening_since is not None and self.opening_since >= self.motion_since)))
+      near_clear_reentry = (continuous_motion and geometric_demand and self.geometry_target >= self.ceiling - 3. and
+                            curve.direction == self.opening_direction and now - self.opening_last_bend_at < 1.)
       carry_opening = (opening_lead_clear and self.geometry_hold is not None and lane_ok and
-                       not (geometric_demand or self.geometry_restore_blocked or path_blocked or branch_blocked) and
+                       (not geometric_demand or near_clear_reentry) and
+                       not (self.geometry_restore_blocked or path_blocked or branch_blocked) and
                        (self.opening_since is not None or self.opening_ack is not None) and
                        (self.geometry_clear_since is None or now - self.geometry_clear_since < 1.))
       if forecast_authoritative:
@@ -436,6 +480,11 @@ class AcknowledgedCurveSpeed:
           # Owned future-speed recovery supplies a qualified cap, not an
           # unconditional jump to the ceiling. Geometry has its own hold.
           if opening_allowed:
+            if carry_opening and near_clear_reentry and not geometry_active:
+              self.opening_motion_generation = opening_motion_generation
+            if geometry_active:
+              self.opening_last_bend_at = now
+              self.opening_direction = curve.direction
             self.opening_had_lead = early_hint_inhibited
             self.opening_step = self._opening_step(now, set_speed, speed, lateral_accel, model)
           curve_cap = self.geometry_hold if self.geometry_hold is not None else self.ceiling
@@ -454,6 +503,18 @@ class AcknowledgedCurveSpeed:
           self.clear_pending = True
       else:
         self.clear_since = None
+
+    if (opening_motion_generation is not None and speed > 0. and
+        (self.opening_since is not None or self.opening_ack is not None or self.opening_step is not None)):
+      # Once any part of a dwell needs the calibrated gyro, do not transfer it
+      # to raw Ford yaw on a dropout or across a calibration generation change.
+      next_mph = self.opening_ack if self.opening_ack is not None else round(set_speed) + 1
+      if abs(opening_raw_lateral_accel) * max(1., (next_mph / speed) ** 2) > COMFORT_LATERAL_ACCEL:
+        if (self.opening_motion_generation is None and
+            (self.opening_since is None or self.opening_since < self.motion_since)):
+          self.opening_since = self.opening_step = self.opening_ack = None
+        else:
+          self.opening_motion_generation = opening_motion_generation
 
     if self.target is None:
       return self._send(now, set_speed, False)

@@ -32,8 +32,28 @@ def supported(cp):
   return cp.brand == "ford" and cp.carFingerprint == "LINCOLN_NAVIGATOR_MK4" and bool(cp.flags & 1) and not cp.openpilotLongitudinalControl
 
 
+def opening_load(now_ns, speed, requested_curvature, raw_load, compensated_load, motion):
+  """Reconcile Ford yaw with independently calibrated gyro for one bend-exit step."""
+  fallback = abs(raw_load)
+  if (not motion['valid'] or not 0 < motion['sample_ns'] <= motion['received_ns'] <= now_ns or
+      now_ns - motion['sample_ns'] > 100_000_000 or not math.isfinite(raw_load)):
+    return fallback, False
+
+  # Ford and the calibrated openpilot gyro use opposite turn directions.
+  gyro_load = motion['yaw_rate'] * speed
+  uncertainty = motion['yaw_std'] * speed
+  requested = requested_curvature * speed * speed
+  if not all(map(math.isfinite, (gyro_load, uncertainty, requested))) or not 0 <= motion['yaw_std'] <= .03:
+    return fallback, False
+  measured = max(abs(compensated_load), abs(gyro_load) + uncertainty, abs(requested))
+  if abs(gyro_load + compensated_load) > .15:
+    return max(fallback, measured), False
+  return measured, True
+
+
 class VisionCurveContext:
-  def __init__(self, *, comfort=False):
+  def __init__(self, *, comfort=False, motion=None):
+    self.motion = motion
     self.cruise = AcknowledgedCurveSpeed()
     self.model_ns = 0
     self.lane_changing = True
@@ -208,19 +228,33 @@ class VisionCurveContext:
     opening_lead_clear = (following_clear and all(not lead.present or (lead.dRel >= max(55., 3. * speed) and lead.vRel >= 1.5)
                                   for lead in (sm["radarState"].leadOne, sm["radarState"].leadTwo)))
     opening_lead_lateral_accel = math.inf
-    if opening_lead_clear:
+    raw_lateral_accel = lateral_accel
+    opening_motion_generation = None
+    motion = self.motion.latest if self.motion is not None else None
+    check_load = (motion is not None and self.cruise.geometry_trimmed and self.cruise.geometry_hold is not None and
+                  engaged and fresh_control and valid and not (manual or override or steering_pressed or lane_change))
+    if opening_lead_clear or check_load:
       comp_ns = parser.ts_nanos.get("BrakeSnData_3", {}).get("VehYawComp_W_Actl", 0)
       comp_dps = parser.vl.get("BrakeSnData_3", {}).get("VehYawComp_W_Actl", math.nan)
-      # Ford marks the two highest unsigned words as no data and fault.
+      # Ford reserves the two highest encoded yaw values for missing data and sensor faults.
       if 0 < comp_ns <= now_ns and now_ns - comp_ns <= 100_000_000 and -75. <= comp_dps <= 4093 * .03663 - 75.:
         opening_lead_lateral_accel = speed * math.radians(comp_dps)
+        if check_load and motion['generation'] == self.motion.generation:
+          lateral_accel, corroborated = opening_load(now_ns, speed, control.actuators.curvature, lateral_accel,
+                                                    opening_lead_lateral_accel, motion)
+          if corroborated:
+            opening_motion_generation = motion['generation']
     button = self.cruise.update(now_ns / 1e9, engaged=engaged, valid=valid, manual=manual, override=override, set_speed=set_speed,
                               speed=speed / MPH, accel=accel, steering_only=steering_pressed, lane_change=lane_change,
                               model=new_model if (25 * MPH <= speed <= 95 * MPH or
                                                   (self.comfort and self.forecast_clear)) else None,
                               lateral_accel=lateral_accel, opening_lead_lateral_accel=opening_lead_lateral_accel,
-                              preview=preview, early_hint_inhibited=lead_present, opening_lead_clear=opening_lead_clear, following_clear=following_clear, comfort_hint_s=hint_s, cruise_engaged=stock_enabled, cruise_state_valid=cruise_state_valid,
-                              forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear, user_action=user_action, user_set_direction=user_set_direction,
+                              preview=preview, early_hint_inhibited=lead_present, opening_lead_clear=opening_lead_clear,
+                              opening_motion_generation=opening_motion_generation,
+                              opening_raw_lateral_accel=raw_lateral_accel, following_clear=following_clear, comfort_hint_s=hint_s,
+                              cruise_engaged=stock_enabled, cruise_state_valid=cruise_state_valid,
+                              forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear,
+                              user_action=user_action, user_set_direction=user_set_direction,
                               override_kind='brake' if brake_pressed else 'gas' if gas_pressed else None,
                               can_assert=self.can_assert(now_ns, switch_ns, manual),
                               forecast_authoritative=self.comfort,

@@ -255,8 +255,16 @@ class DriverSelectionRegressionTest(unittest.TestCase):
     self.assertEqual(c.ceiling, 70)
     self.assertEqual(c.transport.up_debt, 2)
     self.assertEqual(c.transport.down_debt, 2)
+    # The two display rises could both be old SET+ receipts. A separate
+    # physical selection at the stable display resolves the driver's intent.
+    self.assertTrue(c.suspended)
+    for t, held in ((3.1, True), (3.2, False), (3.7, False)):
+      c.update(t, engaged=True, valid=True, manual=held, override=False,
+               set_speed=70., speed=64., accel=0., model=m, cruise_engaged=True,
+               forecast_clear=True, user_action='set' if held else None)
+    self.assertFalse(c.suspended)
     output = c.update(
-      3.1,
+      3.8,
       engaged=True,
       valid=True,
       manual=False,

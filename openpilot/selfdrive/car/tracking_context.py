@@ -12,6 +12,15 @@ def feed_tracking_context(strategy, *, now_ns, state_ns, control_ns, control_val
   )
 
 
+def steady_curve_inputs(sm, parser):
+  # Read the source timestamps at the actual steering slot. The Ford yaw
+  # message is already optional on the Navigator OEM-ACC powertrain parser.
+  lat = sm['controlsState'].lateralControlState
+  unsaturated = sm.valid['controlsState'] and lat.which() == 'angleState' and lat.angleState.active and not lat.angleState.saturated
+  return (sm.logMonoTime['controlsState'], unsaturated, parser.ts_nanos.get('BrakeSnData_3', {}).get('VehYawComp_W_Actl', 0),
+          parser.vl.get('BrakeSnData_3', {}).get('VehYawComp_W_Actl', float('nan')))
+
+
 def create_tracking_trial(CP, *, enabled, roll_mapping_enabled=False, high_speed_enabled=False):
   from opendbc.car.ford.values import CAR, FordFlags
 

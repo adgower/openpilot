@@ -62,6 +62,13 @@ class BoundedButtonTransport:
     def down_debt(self):
         return self.debt[-1]
 
+    def observe_resume_display(self, display_mph):
+        # RES can restore Ford's stored speed independently of an old SET+.
+        # Keep the increment reserved. A larger unexplained change still faults.
+        rise = display_mph - self.observed
+        if 0 < rise <= self.up_debt:
+            self.observed = display_mph
+
     def update(self, now, observed_mph, target_mph, *, allowed=True, manual=False, can_assert=True):
         def result(button, phase, reason):
             return Output(button, phase, reason, self.pending, self.ceiling)

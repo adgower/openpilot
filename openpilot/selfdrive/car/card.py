@@ -2,6 +2,7 @@
 import os
 import time
 import threading
+from functools import partial
 
 import openpilot.cereal.messaging as messaging
 
@@ -70,7 +71,6 @@ class Car:
     self.pilot_state_ns = 0
     self.pilot_state_valid = False
     self.can_sock = messaging.sub_sock('can', timeout=20)
-    self.sm = messaging.SubMaster(['pandaStates', 'carControl', 'onroadEvents', 'modelV2', 'deviceMotion', 'extrinsicsCalibration', 'radarState'])
     self.pm = messaging.PubMaster(['sendcan', 'carState', 'carParams', 'carOutput', 'radarTracks'])
 
     self.can_rcv_cum_timeout_counter = 0
@@ -131,6 +131,15 @@ class Car:
           from openpilot.selfdrive.car.motion_context import MotionContext
           self.tracking_motion = MotionContext()
 
+    services = ['pandaStates', 'carControl', 'onroadEvents', 'modelV2', 'deviceMotion', 'extrinsicsCalibration', 'radarState']
+    relief = getattr(self.tracking_trial, 'steady_curve_relief', None)
+    if relief is not None:
+      services.append('controlsState')
+    self.sm = messaging.SubMaster(services)
+    if relief is not None:
+      from openpilot.selfdrive.car.tracking_context import steady_curve_inputs
+      relief.read_inputs = partial(steady_curve_inputs, self.sm, self.CI.can_parsers['pt'])
+
     from opendbc.car.ford.longitudinal_coordination import coordination_available
     self.longitudinal_coordination_enabled = bool(
       coordination_available(self.CP) and self.params.get_bool("FordPrefLongitudinalCoordination"))
@@ -177,7 +186,7 @@ class Car:
       if supported(self.CP):
         from opendbc.car.ford.values import FordSafetyFlags
         self.CP.safetyConfigs[-1].safetyParam |= FordSafetyFlags.VISION_CURVE_SPEED.value
-        self.vision_curve = VisionCurveContext(comfort=True)
+        self.vision_curve = VisionCurveContext(comfort=True, motion=self.tracking_motion)
         self.CI.CC.vision_curve_enabled = True
 
     if self.CP.secOcRequired:
