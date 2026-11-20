@@ -112,17 +112,21 @@ class AcknowledgedCurveSpeed:
             and not self.forecast_owned and self.forecast_target is None
             and (not self.transport.down_debt or self.all_decrements_geometry))
 
+  def _motion_allows_step(self, display, speed, lateral_accel):
+    next_mph = round(display) + 1
+    return (self.geometry_target is not None and self.geometry_target >= max(next_mph + 2., speed + 1.) and
+            speed > 0. and abs(speed - display) <= 3. and
+            abs(lateral_accel) * max(1., (next_mph / speed) ** 2) <= COMFORT_LATERAL_ACCEL)
+
   def _opening_step(self, now, display, speed, lateral_accel, model):
     # A partial return must fit both the currently measured turn and every
     # forecast turn, including an opposite-direction bend farther ahead.
     next_mph = round(display) + 1
-    next_speed_sq = (next_mph * MPH) ** 2
     buffered_speed_sq = ((next_mph + 1) * MPH) ** 2
     approach = 2. * COMFORT_APPROACH_DECEL * speed * MPH
     supported = (self.geometry_hold is not None and next_mph < self.ceiling and
-                 self.geometry_target >= max(next_mph + 2., speed + 1.) and abs(speed - display) <= 3. and
+                 self._motion_allows_step(display, speed, lateral_accel) and
                  not model.action.shouldStop and model.action.desiredAcceleration >= .1 and
-                 abs(lateral_accel) * max(next_speed_sq, (speed * MPH) ** 2) <= COMFORT_LATERAL_ACCEL * (speed * MPH) ** 2 and
                  all(velocity >= 5. and
                      abs(rate) * (buffered_speed_sq - approach * max(0., t - COMFORT_RESPONSE_TIME)) <= COMFORT_LATERAL_ACCEL * velocity
                      for t, rate, velocity in zip(model.orientationRate.t, model.orientationRate.z, model.velocity.x, strict=True)))
@@ -141,7 +145,10 @@ class AcknowledgedCurveSpeed:
         steering_only or lane_change or forecast_available is False or self.suspended):
       self.geometry_clear_since = None
       self.opening_since = self.opening_step = self.opening_ack = None
-    if early_hint_inhibited:
+    # A Ford yaw or speed sample can change after the last model frame but
+    # before a neutral button frame arrives. Revoke the earned step at once.
+    if early_hint_inhibited or (self.opening_since is not None and
+                                not self._motion_allows_step(set_speed, speed, lateral_accel)):
       self.opening_since = self.opening_step = self.opening_ack = None
     if not following_clear or self.geometry_clear_since is None:
       self.following_clear_since = None

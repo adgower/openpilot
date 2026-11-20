@@ -24,8 +24,11 @@ def setup_geometry():
   return f, model, c
 
 
-def tick(f, i, *, ack=True):
-  f.update(i * .05)
+def tick(f, i, *, ack=True, new_model=True, yaw_quality=3, yaw_age=0):
+  if hasattr(f.state, 'yawRate'):
+    f.parser.vl['Yaw_Data_FD1'] = {'VehYaw_W_Actl': f.state.yawRate, 'VehYawWActl_D_Qf': yaw_quality}
+    f.parser.ts_nanos['Yaw_Data_FD1'] = {'VehYaw_W_Actl': round((10 + i * .05) * 1e9) - yaw_age}
+  f.update(i * .05, new_model=new_model)
   button = f.context.cruise.last_action
   if ack and button in ('SET+', 'SET-'):
     f.state.cruiseState.speedCluster += MPH if button == 'SET+' else -MPH
@@ -190,3 +193,31 @@ def test_only_acknowledgement_can_raise_working_curve_floor():
   assert c.geometry_hold == 43 and c.opening_ack == 47
   c._send(.25, 47, False)
   assert c.geometry_hold == 47 and c.opening_ack is None
+
+
+@pytest.mark.parametrize('interruption', ['yaw', 'speed', 'quality', 'stale', 'future'])
+def test_motion_change_between_model_and_button_revokes_opening(interruption):
+  f, model, c = setup_geometry()
+  f.state.yawRate = .01
+  for i in range(110):
+    tick(f, i)
+  floor = round(f.state.cruiseState.speedCluster / MPH)
+  f.state.vEgo = (floor - .5) * MPH
+  model.velocity.x = [f.state.vEgo] * 6
+  model.orientationRate.z = [f.state.vEgo * 1.5 / ((floor + 5) * MPH) ** 2] * 6
+  f.context.can_assert = lambda *_: False
+  for i in range(110, 150):
+    tick(f, i)
+    if c.opening_step is not None:
+      break
+  assert c.opening_step == floor + 1
+  if interruption == 'yaw':
+    f.state.yawRate = .2
+  elif interruption == 'speed':
+    f.state.vEgo = (floor + 10) * MPH
+  age = {'stale': 101_000_000, 'future': -1}.get(interruption, 0)
+  f.context.can_assert = lambda *_: True
+  assert tick(f, i + .2, new_model=False, yaw_quality=1 if interruption == 'quality' else 3, yaw_age=age) != 'SET+'
+  assert c.opening_step is None and c.opening_since is None
+  f.state.vEgo, f.state.yawRate = floor * MPH, .01
+  assert all(tick(f, fresh) != 'SET+' for fresh in range(i+1, i+20))

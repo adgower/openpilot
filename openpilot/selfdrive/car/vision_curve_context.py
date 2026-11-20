@@ -95,7 +95,13 @@ class VisionCurveContext:
     override = state.gasPressed or state.brakePressed
     valid &= not engaged or (fresh_model and not stock.nonAdaptive and str(state.gearShifter) == "drive" and 25 <= set_speed <= 95)
     radar_fresh = False
+    lateral_accel = math.inf
     if self.comfort:
+      yaw_ns = parser.ts_nanos.get("Yaw_Data_FD1", {}).get("VehYaw_W_Actl", 0)
+      if 0 < yaw_ns <= now_ns and now_ns - yaw_ns <= 100_000_000:
+        yaw = parser.vl["Yaw_Data_FD1"]
+        if yaw.get("VehYawWActl_D_Qf") == 3:
+          lateral_accel = state.vEgo * yaw["VehYaw_W_Actl"]
       radar_ns = sm.logMonoTime["radarState"]
       radar_fresh = (sm.valid["radarState"] and 0 <= now_ns - radar_ns <= 200_000_000 and
                      radar_is_aligned(model_ns, sm["radarState"]))
@@ -169,7 +175,7 @@ class VisionCurveContext:
                               speed=state.vEgo / MPH, accel=state.aEgo, steering_only=state.steeringPressed, lane_change=lane_change,
                               model=new_model if (25 * MPH <= state.vEgo <= 95 * MPH or
                                                   (self.comfort and self.forecast_clear)) else None,
-                              lateral_accel=state.vEgo * getattr(state, 'yawRate', math.inf) if new_model is not None and self.comfort else math.inf,
+                              lateral_accel=lateral_accel,
                               preview=preview, early_hint_inhibited=lead_present, following_clear=following_clear, comfort_hint_s=hint_s, cruise_engaged=stock.enabled,
                               forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear, user_action=user_action,
                               override_kind='brake' if state.brakePressed else 'gas' if state.gasPressed else None,
