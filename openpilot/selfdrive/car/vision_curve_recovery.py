@@ -7,6 +7,11 @@ from openpilot.selfdrive.car.vision_curve_speed import (
 )
 
 
+# A driver tap while cruise is off must be followed by a fresh OEM engagement.
+# This window applies only to intent, never to a transmitted button credit.
+DRIVER_REENGAGE_WINDOW = 1.
+
+
 class AcknowledgedCurveSpeed:
   def __init__(self):
     self.ceiling = self.observed = self.pending = None
@@ -20,8 +25,13 @@ class AcknowledgedCurveSpeed:
     self.override_until = -math.inf
     self.suspended = False
     self.resume_armed = False
+    self.resume_until = -math.inf
     self.previous_user_action = None
     self.selection_at = None
+    self.selection_engaged = False
+    self.selection_display = None
+    self.selection_direction = 0
+    self.selection_ambiguous = False
     self.manual_at = -math.inf
     self.target = None
     self.forecast_target = None
@@ -30,6 +40,7 @@ class AcknowledgedCurveSpeed:
     self.geometry_trimmed = False
     self.opening_since = self.opening_step = self.opening_ack = None
     self.all_decrements_geometry = False
+    self.carried_decrements = False
     self.following_clear_since = None
     self.current_demand = None
     self.detect_since = self.clear_since = self.accel_since = None
@@ -42,20 +53,28 @@ class AcknowledgedCurveSpeed:
 
   def _start(self, speed):
     self.ceiling = self.observed = round(speed)
-    self.target = float(self.ceiling)
     self.transport = BoundedButtonTransport(self.observed, ceiling_mph=self.ceiling,
                                            minus_interval=.18, plus_interval=.18, press_s=.13, burst=3)
     self.fault = False
     self.suspended = False
     self.resume_armed = False
-    self.forecast_owned = self.forecast_restore_active = False
+    self.all_decrements_geometry = False
+    self.carried_decrements = False
+    self._clear_demand()
+
+  def _clear_demand(self):
+    # The driver still owns the ceiling. An acknowledged reduction may need to
+    # return there, but fresh evidence must supply the next command.
+    reduced = self.observed < self.ceiling
+    self.forecast_restore_active = reduced and (self.forecast_restore_active or self.forecast_owned)
+    self.geometry_trimmed = reduced and self.geometry_trimmed
+    self.target = self.current_demand = None
+    self.forecast_owned = False
     self.forecast_target = self.geometry_target = None
     self.geometry_hold = self.geometry_clear_since = None
-    self.geometry_trimmed = False
     self.opening_since = self.opening_step = self.opening_ack = None
-    self.all_decrements_geometry = False
     self.following_clear_since = None
-    self.current_demand = float(self.ceiling)
+    self.curve_direction = self.last_accel_model_at = None
     self.detect_since = self.clear_since = self.accel_since = None
     self.geometry_restore_blocked = False
     self.model_ok = False
@@ -69,14 +88,31 @@ class AcknowledgedCurveSpeed:
       observed = self.transport.observed
     before = self.transport.observed
     outstanding = self.transport.down_debt
+    # A forecast at or above the reported setpoint cannot request a decrement.
+    # In that overlap, emit only a step justified by the freshly qualified bend
+    # and the positions already reserved for possibly delayed decrements.
+    display = round(observed)
+    down_receipt = max(0, before - display)
+    lowest_next = display - max(0, outstanding - down_receipt) - 1
+    forecast_cannot_reduce = self.forecast_target is not None and self.forecast_target >= display
+    geometry_alone = (self.model_ok and self.detect_since is not None and now - self.detect_since >= .6
+                      and self.geometry_target is not None and lowest_next >= self.geometry_target
+                      and self.geometry_hold is not None and lowest_next >= self.geometry_hold)
+    if (allowed and self.carried_decrements and self.geometry_hold is not None and forecast_cannot_reduce
+        and self.target is not None and self.target < display and not geometry_alone):
+      can_assert = False
     out = self.transport.update(now, round(observed), self.target or self.ceiling, allowed=allowed, can_assert=can_assert)
     acknowledged = max(0, before - self.transport.observed)
+    if not self.transport.down_debt:
+      self.carried_decrements = False
+    elif self.transport.observed > before and self.transport.observed == self.ceiling:
+      self.carried_decrements = True
     if acknowledged and allowed and self.all_decrements_geometry:
       self.geometry_trimmed = True
     # Source is attached at issuance. In a mixed group we cannot know which
     # press Ford accepted; wait for a wholly geometric group before granting.
     if out.button == 'SET-' and out.reason in ('new-pulse', 'repeat-pulse'):
-      geometry_only = self.geometry_hold is not None and self.forecast_target is None
+      geometry_only = self.geometry_hold is not None and (self.forecast_target is None or (forecast_cannot_reduce and geometry_alone))
       self.all_decrements_geometry = geometry_only and (outstanding == acknowledged or self.all_decrements_geometry)
     elif not self.transport.down_debt:
       self.all_decrements_geometry = False
@@ -139,7 +175,7 @@ class AcknowledgedCurveSpeed:
 
   def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model,
              steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None,
-             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True, lateral_accel=math.inf, preview=None, early_hint_inhibited=False, following_clear=False):
+             forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None, forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True, lateral_accel=math.inf, preview=None, early_hint_inhibited=False, following_clear=False, cruise_state_valid=None, user_set_direction=0):
     # No inhibited interval may contribute to geometric release evidence.
     if (not valid or not engaged or not cruise_engaged or manual or override or
         steering_only or lane_change or forecast_available is False or self.suspended):
@@ -153,17 +189,86 @@ class AcknowledgedCurveSpeed:
     if not following_clear or self.geometry_clear_since is None:
       self.following_clear_since = None
     resume_edge = user_action == 'resume' and self.previous_user_action != 'resume'
+    set_edge = user_action == 'set' and self.previous_user_action != 'set'
     self.previous_user_action = user_action
-    # A physical SET selection replaces intent only after button release and
-    # without treating driver movement as an automatic acknowledgement.
-    if user_action == 'set':
-      self.selection_at = self.manual_at = now
-      # A physical SET explains this movement. Release the old scheduler
-      # without submitting the driver change as an automatic ACK.
-      observed = self.transport.observed if self.transport is not None else set_speed
-      return self._send(now, observed, False)
+    native_valid = valid if cruise_state_valid is None else cruise_state_valid
+    native_on = native_valid and cruise_engaged
+    native_off = native_valid and not cruise_engaged
+    stopped = user_action == 'cancel' or (override and override_kind != 'gas')
+    entering_suspend = self.ceiling is not None and not self.suspended and (stopped or native_off)
+    if entering_suspend or stopped:
+      self.selection_ambiguous |= self.selection_at is not None or (stopped and user_action == 'set')
+      self.suspended = True
+      self.resume_armed = False
+      self.selection_at = None
+    if self.resume_armed and now > self.resume_until:
+      self.resume_armed = False
+    if resume_edge and self.suspended and not stopped:
+      if not self.selection_ambiguous or (native_off and self.transport is not None and not self.transport.pending):
+        self.resume_armed = True
+        self.resume_until = now + DRIVER_REENGAGE_WINDOW
+    if self.resume_armed and native_on:
+      # A deliberate OEM restart can re-establish the previously verified
+      # ceiling after a contradictory driver reading only with no unpaid moves.
+      if (self.selection_ambiguous and self.transport is not None and not self.transport.pending
+          and 25 <= set_speed <= 95 and round(set_speed) == self.ceiling):
+        self.selection_ambiguous = False
+        self._start(self.ceiling)
+        self.override_until = max(self.override_until, now + .4)
+      if not self.selection_ambiguous:
+        # Ford can accept RES before radar, the model or lateral control recover.
+        self.suspended = self.resume_armed = False
+
     if self.selection_at is not None:
-      if now - self.manual_at < .4 or not valid or not 25 <= set_speed <= 95:
+      if (self.selection_engaged and native_off) or (not self.selection_engaged and now - self.manual_at > DRIVER_REENGAGE_WINDOW):
+        self.selection_at = None
+      elif native_on:
+        self.selection_engaged = True
+    if user_action == 'set' and not stopped:
+      if set_edge:
+        self.selection_ambiguous = False
+        self.selection_display = None
+        self.selection_direction = user_set_direction
+        self.selection_engaged = bool(native_on)
+      if set_edge or self.selection_at is not None:
+        self.selection_at = self.manual_at = now
+        if native_on and 25 <= set_speed <= 95:
+          display = round(set_speed)
+          if self.selection_display is None or user_set_direction * (display - self.selection_display) >= 0:
+            self.selection_display = display
+          elif self.transport is not None and abs(display - self.selection_display) <= self.transport.debt[-user_set_direction]:
+            # An outstanding move could explain this wrong-direction change.
+            self.selection_ambiguous = True
+          # Otherwise keep the last consistent reading and let the physical
+          # hold finish. A transient contradiction cannot become the ceiling.
+    elif self.selection_at is not None and native_on and self.transport is not None and 25 <= set_speed <= 95:
+      display = round(set_speed)
+      if self.selection_display is None:
+        self.selection_ambiguous = bool(self.transport.pending)
+      else:
+        delta = display - self.selection_display
+        # After release, either a wrong-direction driver value or a change that
+        # might be an old automatic press leaves the new ceiling unconfirmed.
+        if (self.selection_direction * delta < 0 or (delta > 0 and self.transport.up_debt)
+            or (delta < 0 and self.transport.down_debt)):
+          self.selection_ambiguous = True
+    if self.selection_ambiguous and self.selection_at is not None:
+      self.suspended = True
+      self.selection_at = None
+      if self.ceiling is not None:
+        self._clear_demand()
+
+    selecting = user_action == 'set' or self.selection_at is not None or self.selection_ambiguous
+    if stopped or user_action == 'set' or self.selection_ambiguous or not native_on or (self.suspended and not selecting):
+      # A driver SET owns the display delta; it cannot acknowledge an older
+      # synthetic press. Ordinary brake/off can coincide with a genuine receipt.
+      display = self.transport.observed if self.transport is not None and (selecting or not native_valid) else set_speed
+      release = self._send(now, display, False)
+      if entering_suspend:
+        self._clear_demand()
+      return release
+    if self.selection_at is not None:
+      if now - self.manual_at < .4 or not self.selection_engaged or not valid or not 25 <= set_speed <= 95:
         observed = self.transport.observed if self.transport is not None else set_speed
         return self._send(now, observed, False)
       self.selection_at = None
@@ -174,35 +279,11 @@ class AcknowledgedCurveSpeed:
         self.transport.debt = previous_transport.debt.copy()
         self.transport.reserve_down_slot = previous_transport.reserve_down_slot
         self.transport.next_press = max(self.transport.next_press, previous_transport.next_press)
-    if resume_edge and (self.suspended or not cruise_engaged):
-      # A RES tap while already active must not authorize a later unrelated
-      # suspension. Retain a genuine RES edge preceding OEM engagement.
-      self.resume_armed = True
-    if override and override_kind == 'gas' and cruise_engaged and user_action != 'cancel':
-      # Native cruise may stay engaged through accelerator override. Pause
-      # button writes without creating a brake/cancel suspension requiring
-      # the shared RES/CANCEL switch (which would cancel active cruise).
+    if override and override_kind == 'gas':
       self.override_until = max(self.override_until, now + .25)
       self.accel_since = None
       self.model_ok = False
       return self._send(now, set_speed, False)
-    if override or user_action == 'cancel':
-      self.suspended = True
-      # A genuine RES press can precede OEM engagement while the driver is
-      # accelerating. Gas pauses output but must not erase that permission.
-      # Brake, cancel and other overrides still revoke it.
-      if override_kind != 'gas' or user_action == 'cancel':
-        self.resume_armed = False
-      return self._send(now, set_speed, False)
-    if not cruise_engaged:
-      if self.ceiling is not None:
-        self.suspended = True
-      return self._send(now, set_speed, False)
-    if self.suspended:
-      if not (self.resume_armed and engaged and valid):
-        return self._send(now, set_speed, False)
-      self.suspended = False
-      self.resume_armed = False
     if manual and user_action is None:
       self.override_until = max(self.override_until, now + .4)
     if self.ceiling is None:
@@ -340,6 +421,8 @@ class AcknowledgedCurveSpeed:
       else:
         self.clear_since = None
 
+    if self.target is None:
+      return self._send(now, set_speed, False)
     allowed = self.model_ok and now >= self.override_until
     if early_hint_inhibited and ((self.target > set_speed and not self._can_return_while_following(now, following_clear)) or
         (self.target < set_speed and (self.geometry_hold is None or self.geometry_target is None

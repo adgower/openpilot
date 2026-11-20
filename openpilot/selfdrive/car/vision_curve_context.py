@@ -44,6 +44,7 @@ class VisionCurveContext:
     self.forecast_clear = False
     self.forecast_data_valid = False
     self.shared_button_action = None
+    self.require_button_release = False
     self.release_edge = ReleaseEdgeFilter()
     self.used_switch_ns = 0
     self.latest_neutral_ns = 0
@@ -73,25 +74,37 @@ class VisionCurveContext:
     set_ns = parser.ts_nanos["EngBrakeData"]["Veh_V_DsplyCcSet"]
     stock = state.cruiseState
     set_speed = stock.speedCluster / MPH
-    valid = (state.canValid and fresh_control and not metric and
-             0 < switch_ns <= now_ns and now_ns - switch_ns <= 250_000_000 and
-             0 < set_ns <= now_ns and now_ns - set_ns <= 250_000_000)
+    cruise_state_valid = state.canValid and 0 < set_ns <= now_ns and now_ns - set_ns <= 250_000_000
+    switch_fresh = 0 < switch_ns <= now_ns and now_ns - switch_ns <= 250_000_000
+    valid = cruise_state_valid and switch_fresh and fresh_control and not metric
     engaged = control.enabled and control.latActive and stock.enabled and not control.longActive
-    manual = (control.cruiseControl.cancel or control.cruiseControl.resume or
-              any(switches.get(name) or any(switch_samples.get(name, ())) for name in BUTTON_MASKS))
+    physical = any(switches.get(name) or any(switch_samples.get(name, ())) for name in BUTTON_MASKS)
+    manual = control.cruiseControl.cancel or control.cruiseControl.resume or physical
     def pressed(names):
       return any(switches.get(name) or any(switch_samples.get(name, ())) for name in names)
     shared_pressed = pressed(('CcAslButtnCnclResPress',))
-    if not shared_pressed:
+    # A held level across missing switch data cannot establish a new driver tap.
+    if not (switch_fresh and state.canValid) or (shared_pressed and not cruise_state_valid):
+      self.require_button_release = True
+    elif not physical:
+      self.require_button_release = False
+    if not shared_pressed or self.require_button_release:
       self.shared_button_action = None
     elif self.shared_button_action is None:
       self.shared_button_action = 'cancel' if stock.enabled else 'resume'
     # Navigator's physical cancel/resume is the shared switch. Latch the action
     # at its press edge so the ensuing cruise-state transition cannot invert it.
-    user_action = ('set' if pressed(('CcAslButtnSetDecPress', 'CcAslButtnSetIncPress', 'CcAslButtnSetPress',
-                                    'CcAslButtnIndxDecPress', 'CcAslButtnIndxIncPress')) else
-                   'cancel' if control.cruiseControl.cancel or pressed(('CcAslButtnCnclPress', 'CcAslButtnOffCnclPress')) else
+    cancelled = (control.cruiseControl.cancel or self.shared_button_action == 'cancel' or
+                 pressed(('CcAslButtnCnclPress', 'CcAslButtnOffCnclPress')))
+    user_action = ('cancel' if cancelled else None if self.require_button_release else
+                   'set' if pressed(('CcAslButtnSetDecPress', 'CcAslButtnSetIncPress', 'CcAslButtnSetPress',
+                                     'CcAslButtnIndxDecPress', 'CcAslButtnIndxIncPress')) else
                    'resume' if pressed(('CcAsllButtnResPress',)) else self.shared_button_action)
+    user_set_direction = 0
+    if user_action == 'set':
+      inc = pressed(('CcAslButtnSetIncPress', 'CcAslButtnIndxIncPress'))
+      dec = pressed(('CcAslButtnSetDecPress', 'CcAslButtnIndxDecPress'))
+      user_set_direction = int(inc) - int(dec)
     override = state.gasPressed or state.brakePressed
     valid &= not engaged or (fresh_model and not stock.nonAdaptive and str(state.gearShifter) == "drive" and 25 <= set_speed <= 95)
     radar_fresh = False
@@ -109,7 +122,8 @@ class VisionCurveContext:
     following_clear = False
     new_model = preview = None
     hint_s = 0. if self.comfort else None
-    if not (engaged and fresh_model):
+    end_demand = state.brakePressed or not stock.enabled or user_action in ('cancel', 'set')
+    if end_demand or not (engaged and fresh_model):
       self.decel_since = None
     if model_ns != self.model_ns:
       if model_ns - self.model_ns > 200_000_000:
@@ -119,7 +133,7 @@ class VisionCurveContext:
       self.lane_changing = str(model.meta.laneChangeState) != "off"
       if fresh_model:
         new_model = model
-        if self.comfort and engaged:
+        if self.comfort and engaged and not end_demand:
           lead = sm["radarState"].leadOne if radar_fresh else None
           clear = lead is not None and (not lead.present or (
             lead.dRel >= 3.5 * state.vEgo and lead.dRel >= 20. * max(0., -lead.vRel)))
@@ -143,8 +157,6 @@ class VisionCurveContext:
       if new_model is not None:
         preview = measure_curve_preview(new_model)
         allowed &= preview[1]
-      if user_action == 'set':
-        self.prediction.reset()
       if new_model is not None:
         radar = sm["radarState"] if radar_fresh else None
         self.forecast_mph = self.prediction.observe(model_ns / 1e9, state.vEgo / MPH,
@@ -164,7 +176,12 @@ class VisionCurveContext:
                              and self.prediction.ego.detect_since is None and not self.prediction.ego.future_slowdown
                              and stable_following(sm["radarState"], state.vEgo))
       if not allowed:
-        self.prediction.inhibit()
+        # A brake, cancellation or new selection ends the old absolute speed hint.
+        # Ordinary transient overrides may still retain its recovery target.
+        if end_demand and self.prediction.target is not None:
+          self.prediction.reset()
+        else:
+          self.prediction.inhibit()
         self.forecast_mph = None
         self.forecast_clear = False
       if engaged:
@@ -176,8 +193,8 @@ class VisionCurveContext:
                               model=new_model if (25 * MPH <= state.vEgo <= 95 * MPH or
                                                   (self.comfort and self.forecast_clear)) else None,
                               lateral_accel=lateral_accel,
-                              preview=preview, early_hint_inhibited=lead_present, following_clear=following_clear, comfort_hint_s=hint_s, cruise_engaged=stock.enabled,
-                              forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear, user_action=user_action,
+                              preview=preview, early_hint_inhibited=lead_present, following_clear=following_clear, comfort_hint_s=hint_s, cruise_engaged=stock.enabled, cruise_state_valid=cruise_state_valid,
+                              forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear, user_action=user_action, user_set_direction=user_set_direction,
                               override_kind='brake' if state.brakePressed else 'gas' if state.gasPressed else None,
                               can_assert=self.can_assert(now_ns, switch_ns, manual),
                               forecast_authoritative=self.comfort,

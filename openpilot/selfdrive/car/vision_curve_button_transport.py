@@ -118,6 +118,16 @@ class BoundedButtonTransport:
         burst = self.burst
         if wanted < 0 and self.reserve_down_slot:
             burst = max(1, burst - 1)
+        # The last independent credit must be available for a later bend. Spending
+        # it on a fractional endpoint could undershoot the continuous demand if
+        # all already-issued decrements arrive. Keep the slot until Ford reports
+        # a receipt or a full return to the driver's ceiling.
+        if (wanted < 0 and self.burst > 1 and self.down_debt == self.burst - 1
+                and self.observed - self.burst == target < target_mph
+                and can_assert and ((not self.pressed and now >= self.next_press)
+                                   or (self.pressed and now < self.press_until and now >= self.next_repeat))):
+            self.reserve_down_slot = True
+            burst = self.burst - 1
         if self.pressed:
             # A changed demand (or an ACK reaching it) must clear the old
             # level immediately; already-issued movement credit stays owed.
