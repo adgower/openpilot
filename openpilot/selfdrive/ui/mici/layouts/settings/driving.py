@@ -17,7 +17,7 @@ class DrivingLayoutMici(NavScroller):
     self._personality_toggle = BigMultiParamToggle("driving personality", "LongitudinalPersonality", ["aggressive", "standard", "relaxed"],
                                                    description="Standard is recommended.\n" +
                                                                "Aggressive follows closer, with firmer gas and braking.\n" +
-                                                               "Relaxed leaves more space.\n" +
+                                                               "Relaxed follows at the same distance as Standard, with gentler acceleration.\n" +
                                                                "Use the steering wheel distance button on supported cars.")
     self._navigator_toggles = {}
     for key, title, subtitle in (
