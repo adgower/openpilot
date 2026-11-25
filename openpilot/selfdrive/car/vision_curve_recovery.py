@@ -12,6 +12,62 @@ from openpilot.selfdrive.car.vision_curve_speed import (
 DRIVER_REENGAGE_WINDOW = 1.
 
 
+class DriverLowerHold:
+  """Corroborate two native speed drops with separate physical SET− samples."""
+  def __init__(self, now_ns, switch_ns, set_ns, display):
+    self.last_call_ns = now_ns
+    self.last_switch_ns = switch_ns
+    self.last_set_ns = set_ns
+    self.last_display = display
+    self.last_change_ns = 0
+    self.pending_drop_ns = None
+    self.large_drops = 0
+    self.release_ns = None
+
+  def observe(self, now_ns, switch_ns, set_ns, display, samples, level, outstanding):
+    fresh_switch = switch_ns > self.last_switch_ns
+    if (level is None or switch_ns <= 0 or not 0 <= now_ns - self.last_call_ns <= 100_000_000
+        or not 0 <= now_ns - switch_ns <= 150_000_000 or not 0 <= switch_ns - self.last_switch_ns <= 150_000_000
+        or set_ns < self.last_set_ns or not 0 < set_ns <= now_ns or now_ns - set_ns > 250_000_000):
+      return False
+    # The parser exposes every EngBrakeData value but only the timestamp of
+    # its last frame. Use individual steps and date any evidence at batch end.
+    previous = self.last_display
+    large_drop = False
+    for value in samples:
+      if not 25 <= value <= previous or (not level and value != previous):
+        return False
+      large_drop |= previous - value > outstanding
+      previous = value
+    if previous != display:
+      return False
+    if display != self.last_display:
+      if set_ns == self.last_set_ns:
+        return False
+      self.last_change_ns = set_ns
+    if level:
+      if self.release_ns is not None:
+        return False
+      large_drop &= set_ns >= self.last_switch_ns
+      if fresh_switch and self.pending_drop_ns is not None and self.pending_drop_ns <= switch_ns:
+        self.large_drops += 1
+        self.pending_drop_ns = None
+      elif fresh_switch and large_drop and set_ns <= switch_ns:
+        self.large_drops += 1
+      # A newer display on this callback needs another held switch sample.
+      if large_drop and (not fresh_switch or set_ns > switch_ns) and self.pending_drop_ns is None:
+        self.pending_drop_ns = set_ns
+    else:
+      if self.large_drops < 2 or self.last_change_ns > self.last_switch_ns:
+        return False
+      if self.release_ns is None:
+        if not fresh_switch:
+          return False
+        self.release_ns = switch_ns
+    self.last_call_ns, self.last_switch_ns, self.last_set_ns, self.last_display = now_ns, switch_ns, set_ns, display
+    return True
+
+
 class AcknowledgedCurveSpeed:
   def __init__(self):
     self.ceiling = self.observed = self.pending = None
@@ -30,9 +86,11 @@ class AcknowledgedCurveSpeed:
     self.resume_until = -math.inf
     self.previous_user_action = None
     self.native_display = None
+    self.native_display_ns = 0
     self.selection_at = None
     self.selection_engaged = False
     self.selection_display = None
+    self.lower_hold = None
     self.selection_direction = 0
     self.selection_ambiguous = False
     self.manual_at = -math.inf
@@ -60,6 +118,7 @@ class AcknowledgedCurveSpeed:
     self.reason = 'uninitialized'
 
   def _start(self, speed):
+    self.lower_hold = None
     self.ceiling = self.observed = round(speed)
     self.transport = BoundedButtonTransport(self.observed, ceiling_mph=self.ceiling,
                                            minus_interval=.18, plus_interval=.18, press_s=.13, burst=3)
@@ -208,7 +267,7 @@ class AcknowledgedCurveSpeed:
              forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True,
              lateral_accel=math.inf, preview=None, early_hint_inhibited=False, opening_lead_clear=False, opening_lead_lateral_accel=math.inf,
              opening_motion_generation=None, opening_raw_lateral_accel=math.inf, following_clear=False,
-             cruise_state_valid=None, user_set_direction=0, allow_final_restore=True):
+             cruise_state_valid=None, user_set_direction=0, allow_final_restore=True, switch_ns=0, lower_switch=None, set_ns=0, set_samples=()):
     opening_lead_clear = opening_lead_clear and self.geometry_trimmed and self.transport is not None and not self.transport.down_debt
     if opening_lead_clear:
       trial_mph = self.opening_ack if self.opening_ack is not None else round(set_speed) + 1
@@ -240,6 +299,8 @@ class AcknowledgedCurveSpeed:
     native_on = native_valid and cruise_engaged
     native_off = native_valid and not cruise_engaged
     preceding_display = self.native_display
+    preceding_set_ns = self.native_display_ns
+    self.native_display_ns = set_ns
     self.native_display = round(set_speed) if native_on and 25 <= set_speed <= 95 else None
     stopped = user_action == 'cancel' or (override and override_kind != 'gas')
     if stopped or native_off or user_action == 'resume':
@@ -270,6 +331,27 @@ class AcknowledgedCurveSpeed:
       if not self.selection_ambiguous and not self.fault:
         # Ford can accept RES before radar, the model or lateral control recover.
         self.suspended = self.resume_armed = False
+
+    if set_edge:
+      self.lower_hold = None
+      if (lower_switch is True and valid and native_on and engaged
+          and not override and not self.suspended and not self.fault and preceding_display is not None
+          and self.transport and self.transport.down_debt and not self.transport.up_debt):
+        self.lower_hold = DriverLowerHold(round(now * 1e9), switch_ns, preceding_set_ns, preceding_display)
+    if self.lower_hold is not None:
+      hold = self.lower_hold
+      if (not valid or not native_on or not engaged or override or not 25 <= set_speed <= 95
+          or self.fault or self.transport.up_debt or not hold.observe(round(now * 1e9), switch_ns, set_ns, round(set_speed),
+                                                                      set_samples, lower_switch, self.transport.down_debt)):
+        self.lower_hold = None
+      elif self.selection_ambiguous and hold.release_ns is not None and switch_ns - hold.release_ns >= 400_000_000:
+        # Follow the existing settled-selection path. It preserves every
+        # outstanding credit and the next permitted transmission time.
+        self.selection_ambiguous = False
+        self.selection_engaged = True
+        self.selection_display = round(set_speed)
+        self.selection_at = self.manual_at = hold.release_ns / 1e9
+        self.lower_hold = None
 
     if self.selection_at is not None:
       if (self.selection_engaged and native_off) or (not self.selection_engaged and now - self.manual_at > DRIVER_REENGAGE_WINDOW):

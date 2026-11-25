@@ -21,6 +21,10 @@ class CaptureCruise:
     self.last_action = None
 
   @property
+  def lower_hold(self):
+    return self.controller.lower_hold if self.controller is not None else None
+
+  @property
   def ceiling(self):
     return self.controller.ceiling if self.controller is not None else None
 
@@ -68,7 +72,7 @@ class ContextFixture:
     self.control = SimpleNamespace(enabled=True, latActive=True, longActive=False, cruiseControl=SimpleNamespace(cancel=False, resume=False))
     self.parser = SimpleNamespace(vl={"Steering_Data_FD1": {}}, vl_all={"Steering_Data_FD1": {}}, ts_nanos={"Steering_Data_FD1": {}, "EngBrakeData": {}})
 
-  def update(self, seconds, *, new_model=True, radar_fresh=True, metric=False):
+  def update(self, seconds, *, new_model=True, radar_fresh=True, metric=False, display_lag_ns=0):
     now = round((10.0 + seconds) * 1e9)
     if new_model:
       self.sm.logMonoTime["modelV2"] = now
@@ -79,7 +83,7 @@ class ContextFixture:
     # Ford's native cruise switch updates at 10 Hz, independently of the model callback.
     switch_ns = (now + 10_000_000) // 100_000_000 * 100_000_000 - 10_000_000
     self.parser.ts_nanos["Steering_Data_FD1"]["CcAslButtnSetIncPress"] = switch_ns
-    self.parser.ts_nanos["EngBrakeData"]["Veh_V_DsplyCcSet"] = now
+    self.parser.ts_nanos["EngBrakeData"]["Veh_V_DsplyCcSet"] = now - display_lag_ns
     self.context.update(now, self.sm, self.parser, self.state, self.control, metric)
     return self.context.cruise.calls[-1][1]
 

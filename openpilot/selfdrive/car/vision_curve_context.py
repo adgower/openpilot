@@ -27,6 +27,23 @@ BUTTON_MASKS = (
   "CcButtnOnOffPress", "CcButtnOnPress", "AslButtnOnOffCnclPress", "AslButtnOnOffPress",
 )
 
+SET_MINUS = "CcAslButtnSetDecPress"
+OTHER_DRIVER_ASSIST_SWITCHES = ("AccButtnGapDecPress", "AccButtnGapIncPress", "AccButtnGapTogglePress", "TjaButtnOnOffPress")
+
+
+def lower_switch_level(switches, samples, active_buttons, manual, action, direction):
+  """Return an exclusive held or neutral level; a mixed batch proves neither."""
+  level = switches.get(SET_MINUS)
+  if level is None or any(sample != level for sample in samples.get(SET_MINUS, ())):
+    return None
+  if any(switches.get(key) or any(samples.get(key, ())) for key in OTHER_DRIVER_ASSIST_SWITCHES):
+    return None
+  if not level and not manual:
+    return False
+  if level and action == 'set' and direction == -1 and len(active_buttons) == 1 and SET_MINUS in active_buttons:
+    return True
+  return None
+
 
 def supported(cp):
   return cp.brand == "ford" and cp.carFingerprint == "LINCOLN_NAVIGATOR_MK4" and bool(cp.flags & 1) and not cp.openpilotLongitudinalControl
@@ -277,6 +294,11 @@ class VisionCurveContext:
       # The last increase has no immediate benefit while Ford is following a
       # slower lead below the current setting. Recheck on every fresh sample.
       allow_final_restore = self.final_restore_lead.allowed(sm["radarState"] if radar_fresh else None, radar_ns, radar_fresh, speed, set_speed)
+    lower_switch = None
+    set_samples = ()
+    if not (cancel or cruise_control.resume) and (user_set_direction == -1 or self.cruise.lower_hold is not None):
+      lower_switch = lower_switch_level(switches, switch_samples, active_buttons, manual, user_action, user_set_direction)
+      set_samples = parser.vl_all.get("EngBrakeData", {}).get("Veh_V_DsplyCcSet", ())
     button = self.cruise.update(now_ns / 1e9, engaged=engaged, valid=valid, manual=manual, override=override, set_speed=set_speed,
                               speed=speed / MPH, accel=accel, steering_only=steering_pressed, lane_change=lane_change,
                               model=new_model if (25 * MPH <= speed <= 95 * MPH or
@@ -288,6 +310,7 @@ class VisionCurveContext:
                               cruise_engaged=stock_enabled, cruise_state_valid=cruise_state_valid,
                               forecast_mph=self.forecast_mph, forecast_clear=self.forecast_clear,
                               user_action=user_action, user_set_direction=user_set_direction, allow_final_restore=allow_final_restore,
+                              switch_ns=switch_ns, lower_switch=lower_switch, set_ns=set_ns, set_samples=set_samples,
                               override_kind='brake' if brake_pressed else 'gas' if gas_pressed else None,
                               can_assert=self.can_assert(now_ns, switch_ns, manual),
                               forecast_authoritative=self.comfort,
