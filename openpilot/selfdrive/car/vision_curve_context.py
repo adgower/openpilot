@@ -276,7 +276,8 @@ class VisionCurveContext:
     raw_lateral_accel = lateral_accel
     opening_motion_generation = None
     motion = self.motion.latest if self.motion is not None else None
-    check_load = (motion is not None and self.cruise.geometry_trimmed and self.cruise.geometry_hold is not None and
+    check_load = (motion is not None and self.cruise.geometry_trimmed and
+                  (self.cruise.geometry_hold is not None or (following_clear and now_ns / 1e9 <= self.cruise.post_pedal_until)) and
                   engaged and fresh_control and valid and not (manual or override or steering_pressed or lane_change))
     if opening_lead_clear or check_load:
       comp_ns = parser.ts_nanos.get("BrakeSnData_3", {}).get("VehYawComp_W_Actl", 0)

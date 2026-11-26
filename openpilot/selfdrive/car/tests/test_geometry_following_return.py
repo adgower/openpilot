@@ -221,3 +221,62 @@ def test_motion_change_between_model_and_button_revokes_opening(interruption):
   assert c.opening_step is None and c.opening_since is None
   f.state.vEgo, f.state.yawRate = floor * MPH, .01
   assert all(tick(f, fresh) != 'SET+' for fresh in range(i+1, i+20))
+
+
+def post_pedal_exit():
+  c = AcknowledgedCurveSpeed()
+  c._start(70)
+  c.transport.observed = c.observed = 38
+  c.geometry_trimmed = c.model_ok = True
+  c.target, c.geometry_target, c.current_demand = 38., 70., 70.
+  inputs = {
+    'engaged': True, 'valid': True, 'manual': False, 'override': False, 'cruise_engaged': True,
+    'set_speed': 38., 'speed': 58., 'accel': 0., 'model': None, 'forecast_authoritative': True,
+    'forecast_available': True, 'lateral_accel': 1.2, 'opening_motion_generation': 5,
+    'early_hint_inhibited': True, 'following_clear': True,
+  }
+  assert c.update(0., **(inputs | {'override': True, 'override_kind': 'gas'})) != 'SET+'
+  # The geometry and following clocks are established by model frames after release.
+  c.geometry_clear_since, c.following_clear_since, c.model_ok = .01, .41, True
+  return c, inputs
+
+
+@pytest.mark.parametrize('receipt_delay', [.04, .38, None])
+def test_one_post_pedal_step_before_full_return(receipt_delay):
+  c, inputs = post_pedal_exit()
+  assert c.update(1.99, **inputs) != 'SET+'
+  assert c.update(2.02, **inputs) == 'SET+'
+  assert c.target == 39 and c.transport.up_debt == 1
+  for tick_idx in range(1, 48):
+    if receipt_delay is not None and tick_idx >= round(receipt_delay * 100):
+      inputs['set_speed'] = 39.
+    assert c.update(2.02 + tick_idx * .01, **inputs) != 'SET+'
+  assert c.transport.up_debt == int(receipt_delay is None)
+  assert c.transport.observed == (38 if receipt_delay is None else 39)
+  assert not c.transport.fault
+
+
+@pytest.mark.parametrize('change', [
+  {'speed': 39.}, {'opening_motion_generation': None}, {'lateral_accel': 1.51}, {'following_clear': False},
+  {'steering_only': True}, {'lane_change': True}, {'valid': False}, {'forecast_available': False},
+  {'override': True, 'override_kind': 'gas'}, {'override': True, 'override_kind': 'brake'},
+  {'manual': True, 'user_action': 'cancel'}, {'can_assert': False}, {'early_hint_inhibited': False},
+])
+def test_post_pedal_step_requires_all_inputs_at_the_wire(change):
+  c, inputs = post_pedal_exit()
+  assert c.update(2.02, **(inputs | change)) != 'SET+'
+  assert c.transport.up_debt == 0
+
+
+@pytest.mark.parametrize('block', ['down_debt', 'up_debt', 'new_bend', 'new_forecast', 'final_mph', 'expired'])
+def test_post_pedal_step_cannot_spend_ambiguous_or_expired_headroom(block):
+  c, inputs = post_pedal_exit()
+  if block in ('down_debt', 'up_debt'):
+    c.transport.debt[-1 if block == 'down_debt' else 1] = 1
+  elif block == 'new_bend':
+    c.geometry_restore_blocked = True
+  elif block == 'new_forecast':
+    c.forecast_target, c.forecast_owned = 35., True
+  elif block == 'final_mph':
+    c.ceiling = c.transport.ceiling = 39
+  assert c.update(3.01 if block == 'expired' else 2.02, **inputs) != 'SET+'

@@ -108,6 +108,7 @@ class AcknowledgedCurveSpeed:
     self.all_decrements_geometry = False
     self.carried_decrements = False
     self.following_clear_since = None
+    self.post_pedal_until = -math.inf
     self.current_demand = None
     self.detect_since = self.clear_since = self.accel_since = None
     self.curve_direction = None
@@ -148,13 +149,14 @@ class AcknowledgedCurveSpeed:
     self.opening_direction = None
     self.opening_had_lead = False
     self.following_clear_since = None
+    self.post_pedal_until = -math.inf
     self.curve_direction = self.last_accel_model_at = None
     self.detect_since = self.clear_since = self.accel_since = None
     self.geometry_restore_blocked = False
     self.model_ok = False
     self.clear_pending = False
 
-  def _send(self, now, observed, allowed, *, can_assert=True, allow_final_restore=True):
+  def _send(self, now, observed, allowed, *, can_assert=True, allow_final_restore=True, post_pedal_step=False):
     if self.transport is None:
       return None
     # Off-road/invalid samples carry no new authoritative setpoint evidence.
@@ -175,7 +177,8 @@ class AcknowledgedCurveSpeed:
     if (allowed and self.carried_decrements and self.geometry_hold is not None and forecast_cannot_reduce
         and self.target is not None and self.target < display and not geometry_alone):
       can_assert = False
-    out = self.transport.update(now, round(observed), self.target or self.ceiling, allowed=allowed, can_assert=can_assert,
+    target = display + 1 if post_pedal_step else self.target or self.ceiling
+    out = self.transport.update(now, display, target, allowed=allowed, can_assert=can_assert,
                                 allow_final_restore=allow_final_restore)
     acknowledged = max(0, before - self.transport.observed)
     if not self.transport.down_debt:
@@ -217,12 +220,15 @@ class AcknowledgedCurveSpeed:
     # internal hold phase gates timing; 100 Hz callbacks must not turn a
     # single pulse credit into five independent button transmissions.
     if out.button and out.reason in ('new-pulse', 'repeat-pulse'):
+      if post_pedal_step and out.button == 'SET+':
+        self.target = target
+        self.post_pedal_until = -math.inf
       return out.button
     return '' if out.phase == 'release' else None
 
-  def _can_return_while_following(self, now, following_clear):
+  def _can_return_while_following(self, now, following_clear, clear_time=2.5):
     return (following_clear and self.geometry_trimmed and self.geometry_hold is None
-            and self.geometry_clear_since is not None and now - self.geometry_clear_since >= 2.5
+            and self.geometry_clear_since is not None and now - self.geometry_clear_since >= clear_time
             and self.following_clear_since is not None and now - self.following_clear_since >= 1.
             and not self.forecast_owned and self.forecast_target is None
             and (not self.transport.down_debt or self.all_decrements_geometry))
@@ -303,6 +309,10 @@ class AcknowledgedCurveSpeed:
     self.native_display_ns = set_ns
     self.native_display = round(set_speed) if native_on and 25 <= set_speed <= 95 else None
     stopped = user_action == 'cancel' or (override and override_kind != 'gas')
+    if not (valid and engaged and native_on) or stopped or manual or lane_change or steering_only or self.suspended:
+      self.post_pedal_until = -math.inf
+    elif override and override_kind == 'gas' and self.geometry_trimmed:
+      self.post_pedal_until = now + 3.
     if stopped or native_off or user_action == 'resume':
       self.awaiting_native_display = True
     entering_suspend = self.ceiling is not None and not self.suspended and (stopped or native_off)
@@ -602,6 +612,17 @@ class AcknowledgedCurveSpeed:
     if self.target is None:
       return self._send(now, set_speed, False)
     allowed = self.model_ok and now >= self.override_until
+    # The driver has already accelerated beyond the proposed setting. Only
+    # probe one unoccupied position below the ceiling, on a verified exit.
+    # Advance the retained target only if the transport issues that step.
+    post_pedal_step = (now <= self.post_pedal_until and allowed and forecast_authoritative and early_hint_inhibited
+                       and self._can_return_while_following(now, following_clear, clear_time=2.)
+                       and not self.geometry_restore_blocked and not self.transport.pending
+                       and self.target < round(set_speed) + 1 < min(speed, self.ceiling)
+                       and self.current_demand is not None and round(set_speed) + 1 <= self.current_demand
+                       and opening_motion_generation is not None and abs(lateral_accel) <= COMFORT_LATERAL_ACCEL)
+    if post_pedal_step:
+      return self._send(now, set_speed, True, can_assert=can_assert, allow_final_restore=allow_final_restore, post_pedal_step=True)
     opening_with_lead = opening_lead_clear and self.opening_step is not None and self.target <= round(set_speed) + 1
     if early_hint_inhibited and ((self.target > set_speed and not (opening_with_lead or self._can_return_while_following(now, following_clear))) or
         (self.target < set_speed and (self.geometry_hold is None or self.geometry_target is None
