@@ -139,3 +139,43 @@ def test_manual_selection_does_not_release_reserved_decrement_slot():
   assert cruise.ceiling == 68
   assert cruise.transport.down_debt == 2 and cruise.transport.reserve_down_slot
   assert not issued(cruise.transport.update(2., 68, 60))
+
+
+def test_brief_permission_cannot_resume_a_blocked_following_return():
+  cruise = AcknowledgedCurveSpeed()
+  cruise._start(65)
+  cruise.transport.observed = cruise.observed = 55
+  cruise.target = cruise.geometry_target = cruise.current_demand = 65.
+  cruise.geometry_trimmed = cruise.model_ok = True
+  cruise.geometry_clear_since = cruise.following_clear_since = 0.
+  inputs = dict(engaged=True, valid=True, manual=False, override=False, speed=55., accel=0.,
+                set_speed=55., model=None, cruise_engaged=True, early_hint_inhibited=True,
+                forecast_authoritative=True, forecast_available=True)
+  issued = []
+  for tick in range(400):
+    # The 2.5 s geometry dwell completes just before following becomes unsafe.
+    # Only one native neutral frame is available in this first opening.
+    following_clear = tick < 255 or tick >= 260
+    if tick == 260:
+      cruise.following_clear_since = 2.6  # New model evidence starts the following dwell.
+    if cruise.update(tick / 100, **inputs, following_clear=following_clear, can_assert=tick in (254, 390)) == 'SET+':
+      issued.append(tick)
+  assert issued == [390]
+  assert cruise.transport.up_debt == 1
+
+
+def test_new_ceiling_target_after_interior_step_keeps_its_first_opportunity():
+  cruise = AcknowledgedCurveSpeed()
+  cruise._start(70)
+  cruise.transport.observed = cruise.observed = 48
+  cruise.target = 48
+  assert cruise._send(1., 48, False) != 'SET+'
+  cruise.target = 70
+  assert cruise._send(1.01, 48, True, settle_following_return=True) == 'SET+'
+  # Once this full return is interrupted, the next interior step must settle.
+  assert cruise._send(1.5, 49, False) != 'SET+'
+  assert cruise._send(1.51, 49, True, settle_following_return=True) != 'SET+'
+  assert cruise._send(1.60, 49, False) != 'SET+'
+  for tick in range(161, 174):
+    assert cruise._send(tick / 100, 49, True, settle_following_return=True) != 'SET+'
+  assert cruise._send(1.75, 49, True, settle_following_return=True) == 'SET+'

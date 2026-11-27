@@ -99,6 +99,7 @@ class AcknowledgedCurveSpeed:
     self.geometry_target = None
     self.geometry_hold = self.geometry_clear_since = None
     self.geometry_trimmed = False
+    self.interrupted_ceiling_return = False
     self.opening_since = self.opening_step = self.opening_ack = None
     self.opening_motion_generation = self.motion_generation = None
     self.motion_since = -math.inf
@@ -139,6 +140,7 @@ class AcknowledgedCurveSpeed:
     self.forecast_restore_active = reduced and (self.forecast_restore_active or self.forecast_owned)
     self.geometry_trimmed = reduced and self.geometry_trimmed
     self.target = self.current_demand = None
+    self.interrupted_ceiling_return = False
     self.forecast_owned = False
     self.forecast_target = self.geometry_target = None
     self.geometry_hold = self.geometry_clear_since = None
@@ -156,7 +158,7 @@ class AcknowledgedCurveSpeed:
     self.model_ok = False
     self.clear_pending = False
 
-  def _send(self, now, observed, allowed, *, can_assert=True, allow_final_restore=True, post_pedal_step=False):
+  def _send(self, now, observed, allowed, *, can_assert=True, allow_final_restore=True, post_pedal_step=False, settle_following_return=False):
     if self.transport is None:
       return None
     # Off-road/invalid samples carry no new authoritative setpoint evidence.
@@ -178,8 +180,15 @@ class AcknowledgedCurveSpeed:
         and self.target is not None and self.target < display and not geometry_alone):
       can_assert = False
     target = display + 1 if post_pedal_step else self.target or self.ceiling
+    # A freshly qualified ceiling target has already passed its model gates.
+    # Recheck persistence when resuming a previously inhibited full return.
+    if self.target != self.ceiling or display >= self.ceiling:
+      self.interrupted_ceiling_return = False
+    elif not allowed:
+      self.interrupted_ceiling_return = True
     out = self.transport.update(now, display, target, allowed=allowed, can_assert=can_assert,
-                                allow_final_restore=allow_final_restore)
+                                allow_final_restore=allow_final_restore,
+                                settle_following_return=settle_following_return and self.interrupted_ceiling_return)
     acknowledged = max(0, before - self.transport.observed)
     if not self.transport.down_debt:
       self.carried_decrements = False
@@ -644,5 +653,6 @@ class AcknowledgedCurveSpeed:
     # actual speed is already below the requested comfort target.
     if self.target is not None and self.target < set_speed and speed <= max(self.target, self.current_demand or self.target):
       allowed = False
-    return self._send(now, set_speed, allowed, can_assert=can_assert, allow_final_restore=allow_final_restore)
+    return self._send(now, set_speed, allowed, can_assert=can_assert, allow_final_restore=allow_final_restore,
+                      settle_following_return=forecast_authoritative and early_hint_inhibited)
 

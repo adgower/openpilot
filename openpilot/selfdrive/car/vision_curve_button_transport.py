@@ -69,7 +69,8 @@ class BoundedButtonTransport:
         if 0 < rise <= self.up_debt:
             self.observed = display_mph
 
-    def update(self, now, observed_mph, target_mph, *, allowed=True, manual=False, can_assert=True, allow_final_restore=True):
+    def update(self, now, observed_mph, target_mph, *, allowed=True, manual=False, can_assert=True, allow_final_restore=True,
+               settle_following_return=False):
         def result(button, phase, reason):
             return Output(button, phase, reason, self.pending, self.ceiling)
         valid = all(math.isfinite(v) for v in (now, observed_mph, target_mph))
@@ -109,6 +110,10 @@ class BoundedButtonTransport:
             self.restore_ready_since = None
         elif self.restore_ready_since is None:
             self.restore_ready_since = now
+        # A brief opening while following can end before Ford samples even an
+        # interior increment. Qualify before issuance; release still wins immediately.
+        if restoring and settle_following_return:
+            can_assert &= now - self.restore_ready_since >= self.press_s
         if restoring and self.observed + self.up_debt + 1 == self.ceiling:
             can_assert &= allow_final_restore and now - self.restore_ready_since >= self.press_s
         if not allowed:
