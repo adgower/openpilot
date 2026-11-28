@@ -137,8 +137,11 @@ class Car:
       services.append('controlsState')
     self.sm = messaging.SubMaster(services)
     if relief is not None:
+      from opendbc.car.ford.lateral_angle_centered_hold import CenteredCommandHold
       from openpilot.selfdrive.car.tracking_context import steady_curve_inputs
-      relief.read_inputs = partial(steady_curve_inputs, self.sm, self.CI.can_parsers['pt'])
+      parser = self.CI.can_parsers['pt']
+      relief.read_inputs = partial(steady_curve_inputs, self.sm, parser)
+      self.tracking_trial.steady_curve_relief = CenteredCommandHold(relief, parser)
 
     from opendbc.car.ford.longitudinal_coordination import coordination_available
     self.longitudinal_coordination_enabled = bool(

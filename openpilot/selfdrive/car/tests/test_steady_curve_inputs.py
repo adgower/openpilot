@@ -61,5 +61,7 @@ def test_card_constructor_wires_only_selected_ford_trial(monkeypatch, oem, enabl
   relief = getattr(instance.CI.CC.lateral_angle, 'steady_curve_relief', None)
   assert (relief is not None) == expected
   if expected:
+    from opendbc.car.ford.lateral_angle_centered_hold import CenteredCommandHold
+    assert isinstance(relief, CenteredCommandHold)
     # At boot the genuine Ford parser has registered yaw but has no sample.
     assert relief.read_inputs()[:3] == (0, False, 0)
