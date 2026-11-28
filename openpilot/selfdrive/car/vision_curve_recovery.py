@@ -279,7 +279,7 @@ class AcknowledgedCurveSpeed:
   def update(self, now, *, engaged, valid, manual, override, set_speed, speed, accel, model,
              steering_only=False, lane_change=False, comfort_hint_s=None, cruise_engaged=None,
              forecast_mph=None, forecast_clear=False, user_action=None, override_kind=None,
-             forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True,
+             forecast_authoritative=False, forecast_available=None, forecast_reduce_mph=None, can_assert=True, following_up_ready=True,
              lateral_accel=math.inf, preview=None, early_hint_inhibited=False, opening_lead_clear=False, opening_lead_lateral_accel=math.inf,
              opening_motion_generation=None, opening_raw_lateral_accel=math.inf, following_clear=False,
              cruise_state_valid=None, user_set_direction=0, allow_final_restore=True, switch_ns=0, lower_switch=None, set_ns=0, set_samples=()):
@@ -630,6 +630,8 @@ class AcknowledgedCurveSpeed:
                        and self.target < round(set_speed) + 1 < min(speed, self.ceiling)
                        and self.current_demand is not None and round(set_speed) + 1 <= self.current_demand
                        and opening_motion_generation is not None and abs(lateral_accel) <= COMFORT_LATERAL_ACCEL)
+    if early_hint_inhibited and (post_pedal_step or self.target > set_speed):
+      can_assert &= following_up_ready
     if post_pedal_step:
       return self._send(now, set_speed, True, can_assert=can_assert, allow_final_restore=allow_final_restore, post_pedal_step=True)
     opening_with_lead = opening_lead_clear and self.opening_step is not None and self.target <= round(set_speed) + 1

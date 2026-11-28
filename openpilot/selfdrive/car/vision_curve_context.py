@@ -68,6 +68,17 @@ def opening_load(now_ns, speed, requested_curvature, raw_load, compensated_load,
   return measured, True
 
 
+def following_press_ready(model_ns, model, radar):
+  """Defer a new SET+ while radar is still processing weak camera evidence."""
+  if radar.mdMonoTime == model_ns:
+    return True
+  leads = (radar.leadOne, radar.leadTwo)
+  camera_leads = model.leadsV3
+  return len(camera_leads) >= len(leads) and all(
+    not lead.present or .7 <= camera_leads[i].prob <= 1. for i, lead in enumerate(leads)
+  )
+
+
 class FinalRestoreLeadCheck:
   """After a closing lead, confirm clearance across distinct radar samples."""
   def __init__(self):
@@ -295,6 +306,11 @@ class VisionCurveContext:
       # The last increase has no immediate benefit while Ford is following a
       # slower lead below the current setting. Recheck on every fresh sample.
       allow_final_restore = self.final_restore_lead.allowed(sm["radarState"] if radar_fresh else None, radar_ns, radar_fresh, speed, set_speed)
+    # radard may still describe the preceding camera frame when its successor
+    # arrives just before a switch slot. Do not start an increase on weak new
+    # lead evidence until the corresponding radar result has caught up.
+    can_assert = self.can_assert(now_ns, switch_ns, manual)
+    following_up_ready = not (can_assert and lead_present) or following_press_ready(model_ns, sm["modelV2"], sm["radarState"])
     lower_switch = None
     set_samples = ()
     if not (cancel or cruise_control.resume) and (user_set_direction == -1 or self.cruise.lower_hold is not None):
@@ -313,7 +329,7 @@ class VisionCurveContext:
                               user_action=user_action, user_set_direction=user_set_direction, allow_final_restore=allow_final_restore,
                               switch_ns=switch_ns, lower_switch=lower_switch, set_ns=set_ns, set_samples=set_samples,
                               override_kind='brake' if brake_pressed else 'gas' if gas_pressed else None,
-                              can_assert=self.can_assert(now_ns, switch_ns, manual),
+                              can_assert=can_assert, following_up_ready=following_up_ready,
                               forecast_authoritative=self.comfort,
                               forecast_reduce_mph=self.prediction.reduction_target if self.comfort else None,
                               forecast_available=(self.prediction.available and speed > .1 and
